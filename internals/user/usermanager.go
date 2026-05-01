@@ -21,7 +21,7 @@ func (um *UserManager) AddUser(id, nama string) error {
 			return errors.New("error: user dengan id '" + id + "' sudah terdaftar")
 		}
 	}
-	um.data = append(um.data, &models.User{ID: id, Nama: nama})
+	um.data = append(um.data, &models.User{Id: id, Nama: nama})
 	fmt.Printf("User '%s' dengan id '%s' berhasil ditambahkan.\n", nama, id)
 	return nil
 }

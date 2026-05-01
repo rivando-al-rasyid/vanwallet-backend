@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+
+	"github.com/rivando-al-rasyid/vanwallet-backend/internals/user"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/webfetch"
 )
 
@@ -21,4 +24,37 @@ func main() {
 		webfetch.Receiver(urlch)
 	}
 
+	um := user.NewUserManager()
+
+	fmt.Println("=== Manajemen User ===")
+
+	fmt.Println("\n-- test AddUser --")
+	if err := um.AddUser("001", "Budi Santoso"); err != nil {
+		fmt.Println(err)
+	}
+	if err := um.AddUser("002", "Siti Rahayu"); err != nil {
+		fmt.Println(err)
+	}
+	if err := um.AddUser("003", "Andi Wijaya"); err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println("\n-- test Duplicate --")
+	if err := um.AddUser("002", "Budi Lagi"); err != nil {
+		fmt.Println(err)
+	}
+
+	// 4. Get existing user
+	fmt.Println("\n-- test GetUser --")
+	if user, err := um.GetUser("002"); err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Printf("User ditemukan: Id=%s, Nama=%s\n", user.Id, user.Nama)
+	}
+	fmt.Println("\n-- test GetUser --")
+	if u, err := um.GetUser("002"); err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Printf("User ditemukan: Id=%s, Nama=%s\n", u.Id, u.Nama)
+	}
 }
