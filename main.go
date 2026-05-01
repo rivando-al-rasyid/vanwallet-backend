@@ -1,11 +1,11 @@
 package main
 
 import (
-	"sync"
+	"github.com/rivando-al-rasyid/vanwallet-backend/internals/webfetch"
 )
 
 func main() {
-	var wg sync.WaitGroup
+
 	urls := []string{
 		"https://example.com",
 		"https://golang.org",
@@ -14,11 +14,11 @@ func main() {
 		"https://anthropic.com",
 	}
 
-	urlchan := make(chan string)
+	for _, url := range urls {
+		urlch := make(chan string)
 
-	// Fetcher goroutines
+		go webfetch.WebFetcher(url, urlch)
+		webfetch.Receiver(urlch)
+	}
 
-	// Receiver goroutine — delegates to receiver.go
-
-	wg.Wait()
 }

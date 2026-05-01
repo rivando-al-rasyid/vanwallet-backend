@@ -7,6 +7,7 @@ import (
 )
 
 func WebFetcher(url string, ch chan string) {
+	defer close(ch)
 	delay := time.Duration(rand.IntN(100)) * time.Millisecond
 	time.Sleep(delay)
 	ch <- fmt.Sprintf("Url: %s", url)
