@@ -44,17 +44,4 @@ func main() {
 		fmt.Println(err)
 	}
 
-	// 4. Get existing user
-	fmt.Println("\n-- test GetUser --")
-	if user, err := um.GetUser("002"); err != nil {
-		fmt.Println(err)
-	} else {
-		fmt.Printf("User ditemukan: Id=%s, Nama=%s\n", user.Id, user.Nama)
-	}
-	fmt.Println("\n-- test GetUser --")
-	if u, err := um.GetUser("002"); err != nil {
-		fmt.Println(err)
-	} else {
-		fmt.Printf("User ditemukan: Id=%s, Nama=%s\n", u.Id, u.Nama)
-	}
 }
