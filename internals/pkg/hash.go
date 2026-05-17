@@ -31,7 +31,7 @@ func NewHashConfig(memory, time uint32, threads uint8, keylen, saltlen uint32) *
 
 func (h *HashConfig) UseRecommended() {
 	// based on OWASP min recommendation (May 2023)
-	h.Memory = 64 * 1024 * 1024 // 64 MiB
+	h.Memory = 64 * 1024 // 64 MiB
 	h.Time = 2
 	h.Threads = 1
 	h.KeyLen = 32
