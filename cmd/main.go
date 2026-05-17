@@ -12,22 +12,31 @@ import (
 )
 
 func main() {
+	// Load .env — tidak fatal jika tidak ada (untuk production compatibility)
 	if err := godotenv.Load(); err != nil {
-		log.Fatalf("Error loading env. \ncause: %s", err.Error())
+		log.Println("No .env file found, relying on system environment variables")
 	}
-	// inisialisasi
-	// gin.New()
-	app := gin.Default()
-	// connect ke db
-	router.RegisterRootRouter(app)
+
+	// Connect DB dulu sebelum register router apapun
 	db, err := config.ConnectPsql()
 	if err != nil {
-		log.Fatalf("DB connection error. \ncause: %s", err.Error())
+		log.Fatalf("DB connection error.\ncause: %s", err.Error())
 	}
 	defer db.Close()
 	log.Println("DB Connected")
-	// install router
-	// run
+
+	// Inisialisasi Gin
+	app := gin.Default()
+
+	// Register semua router setelah DB siap
+	router.RegisterRootRouter(app)
+	router.RegisterAuthRouter(app, db)
+
+	// Run server
 	addr := fmt.Sprintf("%s:%s", os.Getenv("APP_HOST"), os.Getenv("APP_PORT"))
-	app.Run(addr)
+	log.Printf("Server running at %s", addr)
+
+	if err := app.Run(addr); err != nil {
+		log.Fatalf("Failed to start server.\ncause: %s", err.Error())
+	}
 }

@@ -17,26 +17,36 @@ func NewAuthController(authservice *service.AuthService) *AuthController {
 	return &AuthController{
 		authservice: authservice,
 	}
-
 }
 
 func (a *AuthController) Register(ctx *gin.Context) {
 	var body dto.NewUser
-	if err := ctx.ShouldBindBodyWithJSON(body); err != nil {
-		log.Println("Error: ", err.Error())
-		ctx.JSON(http.StatusInternalServerError, dto.Response{Message: "Error", Success: false, Error: "internal server error"})
+
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		log.Printf("[AuthController.Register] JSON binding error: %v\n", err)
+		ctx.JSON(http.StatusBadRequest, dto.Response{
+			Message: "Invalid request payload",
+			Success: false,
+			Error:   "Please ensure your input matches the required format",
+		})
 		return
 	}
+
 	res, err := a.authservice.Register(ctx.Request.Context(), body)
 	if err != nil {
-		log.Println("Error: ", err.Error())
-		ctx.JSON(http.StatusInternalServerError, dto.Response{Message: "Error", Success: false, Error: "internal server error"})
+		log.Printf("[AuthController.Register] Service error: %v\n", err)
+
+		ctx.JSON(http.StatusBadRequest, dto.Response{
+			Message: "Registration failed",
+			Success: false,
+			Error:   err.Error(),
+		})
 		return
 	}
+
 	ctx.JSON(http.StatusCreated, dto.Response{
 		Data:    res,
-		Message: "User Registered",
+		Message: "User successfully registered",
 		Success: true,
 	})
-
 }
