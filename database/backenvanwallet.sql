@@ -1,3 +1,18 @@
+DO $$
+DECLARE
+    l_stmt text;
+BEGIN
+    SELECT 'TRUNCATE ' || string_agg(format('%I.%I', schemaname, tablename), ',') || ' RESTART IDENTITY CASCADE'
+    INTO l_stmt
+    FROM pg_tables
+    WHERE schemaname = 'vanwalletdb';
+
+    IF l_stmt IS NOT NULL THEN
+        EXECUTE l_stmt;
+    END IF;
+END $$;
+
+
 CREATE TYPE "transaction_status" AS ENUM ('PENDING',
                                           'SUCCESS',
                                           'FAILED',
@@ -16,8 +31,8 @@ CREATE TYPE "direction" AS ENUM ('IN',
 
 
 CREATE TABLE "users" ("id" uuid PRIMARY KEY DEFAULT (gen_random_uuid()), "email" varchar UNIQUE NOT NULL,
-                                                                                                                          "password" varchar NOT NULL,
-                                                                                                                                             "created_at" timestamp NOT NULL DEFAULT (now()), "updated_at" timestamp);
+                                                                                                "password" varchar NOT NULL,
+                                                                                                                   "token" varchar, "created_at" timestamp NOT NULL DEFAULT (now()), "updated_at" timestamp);
 
 
 CREATE TABLE "profiles" ("id" uuid PRIMARY KEY DEFAULT (gen_random_uuid()), "user_id" uuid UNIQUE NOT NULL,
@@ -26,9 +41,8 @@ CREATE TABLE "profiles" ("id" uuid PRIMARY KEY DEFAULT (gen_random_uuid()), "use
 
 
 CREATE TABLE "user_pins" ("id" uuid PRIMARY KEY DEFAULT (gen_random_uuid()), "user_id" uuid UNIQUE NOT NULL,
-                                                                                                   "pin_hash" varchar NOT NULL,
-                                                                                                                      "failed_attempts" int NOT NULL DEFAULT 0,
-                                                                                                                                                             "locked_until" timestamp, "created_at" timestamp NOT NULL DEFAULT (now()), "updated_at" timestamp);
+                                                                                                   "pin_hash" varchar, "failed_attempts" int NOT NULL DEFAULT 0,
+                                                                                                                                                              "locked_until" timestamp, "created_at" timestamp NOT NULL DEFAULT (now()), "updated_at" timestamp);
 
 
 CREATE TABLE "wallets" ("id" uuid PRIMARY KEY DEFAULT (gen_random_uuid()), "user_id" uuid NOT NULL,

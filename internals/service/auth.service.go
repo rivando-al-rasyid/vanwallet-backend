@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/dto"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/pkg"
@@ -34,21 +33,42 @@ func (a *AuthService) Register(ctx context.Context, user dto.NewUser) (dto.User,
 	}, nil
 }
 
-func (a *AuthService) Login(ctx context.Context, user dto.NewUser) (dto.User, error) {
-	existingUser, err := a.authRepo.Login(ctx, user.Email)
+func (a *AuthService) Login(ctx context.Context, user dto.NewUser) (string, error) {
+
+	login, err := a.authRepo.Login(ctx, user.Email)
 	if err != nil {
-		// Jangan expose apakah email tidak ditemukan atau password salah
-		return dto.User{}, errors.New("email atau password salah")
+		return "", err
 	}
-
 	var hc pkg.HashConfig
-	if err := hc.Compare(user.Password, existingUser.Password); err != nil {
-		return dto.User{}, errors.New("email atau password salah")
-	}
 
-	return dto.User{
-		Id:        existingUser.Id,
-		Email:     existingUser.Email,
-		CreatedAt: existingUser.CreatedAt,
-	}, nil
+	if err := hc.Compare(user.Password, login.Password); err != nil {
+		return "", err
+	}
+	claims := pkg.NewClaims(login.Id, user.Email)
+	token, err := claims.GenJWT()
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+
+}
+
+func (a *AuthService) Logout(ctx context.Context, user dto.NewUser) (string, error) {
+
+	login, err := a.authRepo.Login(ctx, user.Email)
+	if err != nil {
+		return "", err
+	}
+	var hc pkg.HashConfig
+
+	if err := hc.Compare(user.Password, login.Password); err != nil {
+		return "", err
+	}
+	claims := pkg.NewClaims(login.Id, user.Email)
+	token, err := claims.GenJWT()
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+
 }

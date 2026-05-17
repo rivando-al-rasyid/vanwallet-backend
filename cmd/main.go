@@ -32,8 +32,10 @@ func main() {
 	router.RegisterRootRouter(app)
 	router.RegisterAuthRouter(app, db)
 
-	// Run server
-	addr := fmt.Sprintf("%s:%s", os.Getenv("APP_HOST"), os.Getenv("APP_PORT"))
+	// Run server dengan fallback default
+	host := os.Getenv("APP_HOST")
+	port := os.Getenv("APP_PORT")
+	addr := fmt.Sprintf("%s:%s", host, port)
 	log.Printf("Server running at %s", addr)
 
 	if err := app.Run(addr); err != nil {
