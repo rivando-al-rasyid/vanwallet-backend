@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/config"
+	"github.com/rivando-al-rasyid/vanwallet-backend/internals/router"
 )
 
 func main() {
@@ -18,6 +19,7 @@ func main() {
 	// gin.New()
 	app := gin.Default()
 	// connect ke db
+	router.RegisterRootRouter(app)
 	db, err := config.ConnectPsql()
 	if err != nil {
 		log.Fatalf("DB connection error. \ncause: %s", err.Error())
@@ -26,6 +28,6 @@ func main() {
 	log.Println("DB Connected")
 	// install router
 	// run
-	// addr := fmt.Sprintf("%s:%s", os.Getenv("APP_HOST"), os.Getenv("APP_PORT"))
-	app.Run(fmt.Sprintf("%s:%s", os.Getenv("APP_HOST"), os.Getenv("APP_PORT")))
+	addr := fmt.Sprintf("%s:%s", os.Getenv("APP_HOST"), os.Getenv("APP_PORT"))
+	app.Run(addr)
 }
