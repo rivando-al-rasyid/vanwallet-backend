@@ -1,8 +1,0 @@
-package dto
-
-type Response struct {
-	Message string `json:"message"`
-	Data    any    `json:"data"`
-	Success bool   `json:"isSuccess"`
-	Error   string `json:"error"`
-}
