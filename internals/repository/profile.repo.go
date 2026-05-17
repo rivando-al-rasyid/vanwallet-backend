@@ -15,17 +15,38 @@ func NewProfileRepo(db *pgxpool.Pool) *ProfileRepo {
 	return &ProfileRepo{db: db}
 }
 
-func (a *ProfileRepo) UserProfile(ctx context.Context, email, hashpwd string) (model.User, error) {
-	sql := `	sql := "SELECT id, password FROM users WHERE email = $1"`
-	var user model.User
+func (p *ProfileRepo) UserProfile(ctx context.Context, email string) (model.User, model.Profile, error) {
+	sql := `SELECT
+        u.id,
+        u.email,
+        p.id,
+        p.user_id,
+        p.full_name,
+        p.phone,
+        p.photo,
+        p.created_at,
+        p.updated_at
+    FROM users u
+    JOIN profiles p ON u.id = p.user_id
+    WHERE u.email = $1`
 
-	err := a.db.QueryRow(ctx, sql, email, hashpwd).Scan(
+	var user model.User
+	var profile model.Profile
+
+	err := p.db.QueryRow(ctx, sql, email).Scan(
 		&user.Id,
 		&user.Email,
-		&user.CreatedAt,
+		&profile.Id,
+		&profile.UserId,
+		&profile.FullName,
+		&profile.Phone,
+		&profile.Photo,
+		&profile.CreatedAt,
+		&profile.UpdatedAt,
 	)
 	if err != nil {
-		return model.User{}, err
+		return model.User{}, model.Profile{}, err
 	}
-	return user, nil
+
+	return user, profile, nil
 }

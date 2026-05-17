@@ -31,6 +31,7 @@ func main() {
 	// Register semua router setelah DB siap
 	router.RegisterRootRouter(app)
 	router.RegisterAuthRouter(app, db)
+	router.ProfileRouter(app, db)
 
 	// Run server dengan fallback default
 	host := os.Getenv("APP_HOST")
