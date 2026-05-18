@@ -1,14 +1,24 @@
 package dto
 
-import "time"
-
-type NewUser struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=8"`
+// RegisterRequest is the payload for creating a new user account.
+type RegisterRequest struct {
+	Email    string `json:"email"    validate:"required,email"`
+	Password string `json:"password" validate:"required,min=8"`
 }
 
-type User struct {
-	Id        string    `json:"id"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
+// LoginRequest is the payload for authenticating a user.
+type LoginRequest struct {
+	Email    string `json:"email"    validate:"required,email"`
+	Password string `json:"password" validate:"required"`
+}
+
+// LoginResponse is returned after a successful login.
+type LoginResponse struct {
+	Token string `json:"token"`
+}
+
+// UserResponse is the public-safe representation of a user.
+type UserResponse struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
 }
