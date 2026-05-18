@@ -35,7 +35,7 @@ func (p *ProfileController) GetProfile(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, dto.Response{
 			Message: "Failed to fetch profile",
 			Success: false,
-			Error:   err.Error(),
+			Error:   "data Tidak Ditemukan",
 		})
 		return
 	}

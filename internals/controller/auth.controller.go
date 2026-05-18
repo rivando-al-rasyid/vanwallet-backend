@@ -36,7 +36,7 @@ func (a *AuthController) Register(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, dto.Response{
 			Message: "Registration failed",
 			Success: false,
-			Error:   err.Error(),
+			Error:   "Email Already Exist",
 		})
 		return
 	}
@@ -67,7 +67,7 @@ func (a *AuthController) Login(ctx *gin.Context) {
 		ctx.JSON(http.StatusUnauthorized, dto.Response{
 			Message: "Login failed",
 			Success: false,
-			Error:   err.Error(),
+			Error:   "wrong Email Or Password",
 		})
 		return
 	}

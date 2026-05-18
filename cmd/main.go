@@ -29,9 +29,7 @@ func main() {
 	app := gin.Default()
 
 	// Register semua router setelah DB siap
-	router.RegisterRootRouter(app)
-	router.RegisterAuthRouter(app, db)
-	router.ProfileRouter(app, db)
+	router.MainRouter(app, db)
 
 	// Run server dengan fallback default
 	host := os.Getenv("APP_HOST")
