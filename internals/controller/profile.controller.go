@@ -1,11 +1,11 @@
 package controller
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/dto"
+	"github.com/rivando-al-rasyid/vanwallet-backend/internals/pkg"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/service"
 )
 
@@ -18,20 +18,20 @@ func NewProfileController(profileservice *service.ProfileService) *ProfileContro
 }
 
 func (p *ProfileController) GetProfile(ctx *gin.Context) {
-	email := ctx.Query("email")
-	if email == "" {
-		log.Printf("[ProfileController.GetProfile] Missing email parameter\n")
-		ctx.JSON(http.StatusBadRequest, dto.Response{
-			Message: "Invalid request payload",
+	claims, exists := ctx.Get("claims")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, dto.Response{
+			Message: "Unauthorized",
 			Success: false,
-			Error:   "Email parameter is required",
+			Error:   "Missing claims",
 		})
 		return
 	}
 
+	email := claims.(pkg.Claims).Email
+
 	user, profile, err := p.profileservice.GetProfileByEmail(ctx.Request.Context(), email)
 	if err != nil {
-		log.Printf("[ProfileController.GetProfile] Service error: %v\n", err)
 		ctx.JSON(http.StatusInternalServerError, dto.Response{
 			Message: "Failed to fetch profile",
 			Success: false,

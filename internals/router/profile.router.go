@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/controller"
+	"github.com/rivando-al-rasyid/vanwallet-backend/internals/middleware"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/repository"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/service"
 )
@@ -15,5 +16,5 @@ func ProfileRouter(router *gin.Engine, db *pgxpool.Pool) {
 	profServ := service.NewProfileService(profRepo)
 	profCont := controller.NewProfileController(profServ)
 
-	profileRouter.GET("/", profCont.GetProfile)
+	profileRouter.GET("/", middleware.VerifyToken, profCont.GetProfile)
 }

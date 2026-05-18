@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/model"
 )
@@ -20,9 +19,5 @@ func NewProfileService(repo ProfileRepository) *ProfileService {
 }
 
 func (s *ProfileService) GetProfileByEmail(ctx context.Context, email string) (model.User, model.Profile, error) {
-	if email == "" {
-		return model.User{}, model.Profile{}, errors.New("email cannot be empty")
-	}
-
 	return s.repo.UserProfile(ctx, email)
 }
