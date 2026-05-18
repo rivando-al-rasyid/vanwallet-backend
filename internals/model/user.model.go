@@ -1,10 +1,15 @@
 package model
 
-import "time"
+import (
+	"time"
 
-// User maps to the "users" table.
+	"github.com/google/uuid"
+)
+
+// User represents the core identity record.
+// Credentials only — no PII stored here.
 type User struct {
-	ID        string     `db:"id"`
+	ID        uuid.UUID  `db:"id"`
 	Email     string     `db:"email"`
 	Password  string     `db:"password"`
 	Token     *string    `db:"token"`

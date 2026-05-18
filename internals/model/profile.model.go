@@ -1,11 +1,16 @@
 package model
 
-import "time"
+import (
+	"time"
 
-// Profile maps to the "profiles" table.
+	"github.com/google/uuid"
+)
+
+// Profile stores PII separately from users for easier data management.
+// One-to-one relationship with User.
 type Profile struct {
-	ID        string     `db:"id"`
-	UserID    string     `db:"user_id"`
+	ID        uuid.UUID  `db:"id"`
+	UserID    uuid.UUID  `db:"user_id"`
 	FullName  *string    `db:"full_name"`
 	Phone     *string    `db:"phone"`
 	Photo     *string    `db:"photo"`
