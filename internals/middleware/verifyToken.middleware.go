@@ -33,7 +33,7 @@ func VerifyToken(ctx *gin.Context) {
 		})
 		return
 	}
-	token := splittedBearer[1]
+	token := splitedbearer[1]
 	var claims pkg.Claims
 	if err := claims.VerifyJWT(token); err != nil {
 		log.Println("Error: ", err.Error())
