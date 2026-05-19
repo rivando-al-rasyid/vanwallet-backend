@@ -17,14 +17,30 @@ func NewAuthRepo(db *pgxpool.Pool) *Authrepo {
 
 func (a *Authrepo) Register(ctx context.Context, email, hashpwd string) (model.User, error) {
 	sql := `
-		INSERT INTO users (email, password)
-		VALUES ($1, $2)
-		RETURNING id, email, created_at
+		WITH new_user AS (
+			INSERT INTO users (email, password)
+			VALUES ($1, $2)
+			RETURNING id, email, created_at
+		),
+		new_profile AS (
+			INSERT INTO profiles (user_id)
+			SELECT id FROM new_user
+		),
+		new_pin AS (
+			INSERT INTO user_pins (user_id)
+			SELECT id FROM new_user
+		),
+		new_wallet AS (
+			INSERT INTO wallets (user_id)
+			SELECT id FROM new_user
+		)
+		SELECT id, email, created_at FROM new_user
 	`
+
 	var user model.User
 
 	err := a.db.QueryRow(ctx, sql, email, hashpwd).Scan(
-		&user.Id,
+		&user.ID,
 		&user.Email,
 		&user.CreatedAt,
 	)
@@ -35,16 +51,17 @@ func (a *Authrepo) Register(ctx context.Context, email, hashpwd string) (model.U
 }
 
 func (a *Authrepo) Login(ctx context.Context, email string) (model.User, error) {
-	sql := "SELECT id, email, password FROM users WHERE email = $1"
+	sql := "SELECT id, password FROM users WHERE email = $1"
+	args := []any{email}
 	var user model.User
-
-	err := a.db.QueryRow(ctx, sql, email).Scan(
-		&user.Id,
-		&user.Email,
-		&user.Password,
-	)
-	if err != nil {
+	if err := a.db.QueryRow(ctx, sql, args...).Scan(&user.ID, &user.Password); err != nil {
 		return model.User{}, err
 	}
 	return user, nil
+}
+
+func (a *Authrepo) ClearToken(ctx context.Context, userID string) error {
+	sql := "UPDATE users SET token = NULL, updated_at = now() WHERE id = $1"
+	_, err := a.db.Exec(ctx, sql, userID)
+	return err
 }

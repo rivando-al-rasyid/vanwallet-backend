@@ -18,7 +18,7 @@ func NewAuthController(authservice *service.AuthService) *AuthController {
 }
 
 func (a *AuthController) Register(ctx *gin.Context) {
-	var body dto.NewUser
+	var body dto.RegisterRequest
 
 	if err := ctx.ShouldBindJSON(&body); err != nil {
 		log.Printf("[AuthController.Register] JSON binding error: %v\n", err)
@@ -36,7 +36,7 @@ func (a *AuthController) Register(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, dto.Response{
 			Message: "Registration failed",
 			Success: false,
-			Error:   err.Error(),
+			Error:   "Email Already Exist",
 		})
 		return
 	}
@@ -49,7 +49,7 @@ func (a *AuthController) Register(ctx *gin.Context) {
 }
 
 func (a *AuthController) Login(ctx *gin.Context) {
-	var body dto.NewUser
+	var body dto.LoginRequest
 
 	if err := ctx.ShouldBindJSON(&body); err != nil {
 		log.Printf("[AuthController.Login] JSON binding error: %v\n", err)
@@ -67,7 +67,7 @@ func (a *AuthController) Login(ctx *gin.Context) {
 		ctx.JSON(http.StatusUnauthorized, dto.Response{
 			Message: "Login failed",
 			Success: false,
-			Error:   err.Error(),
+			Error:   "wrong Email Or Password",
 		})
 		return
 	}
