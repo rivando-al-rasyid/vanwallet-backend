@@ -30,7 +30,7 @@ func (p *ProfileController) GetProfile(ctx *gin.Context) {
 
 	email := claims.(pkg.Claims).Email
 
-	_, profile, err := p.profileservice.GetProfileByEmail(ctx.Request.Context(), email)
+	profile, err := p.profileservice.GetProfile(ctx.Request.Context(), email)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, dto.Response{
 			Message: "Failed to fetch profile",
@@ -41,8 +41,41 @@ func (p *ProfileController) GetProfile(ctx *gin.Context) {
 	}
 
 	res := dto.ProfileResponse{
-		ID:       profile.ID,
-		UserID:   profile.UserID,
+		FullName: profile.FullName,
+		Phone:    profile.Phone,
+		Photo:    profile.Photo,
+	}
+	ctx.JSON(http.StatusOK, dto.Response{
+		Data:    res,
+		Message: "Profile successfully retrieved",
+		Success: true,
+	})
+}
+
+func (p *ProfileController) EditProfile(ctx *gin.Context) {
+	claims, exists := ctx.Get("claims")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, dto.Response{
+			Message: "Unauthorized",
+			Success: false,
+			Error:   "Missing claims",
+		})
+		return
+	}
+
+	email := claims.(pkg.Claims).Email
+
+	profile, err := p.profileservice.GetProfile(ctx.Request.Context(), email)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, dto.Response{
+			Message: "Failed to fetch profile",
+			Success: false,
+			Error:   "data Tidak Ditemukan",
+		})
+		return
+	}
+
+	res := dto.ProfileResponse{
 		FullName: profile.FullName,
 		Phone:    profile.Phone,
 		Photo:    profile.Photo,

@@ -7,7 +7,7 @@ import (
 )
 
 type ProfileRepository interface {
-	UserProfile(ctx context.Context, email string) (model.User, model.Profile, error)
+	UserProfile(ctx context.Context, email string) (model.Profile, error)
 }
 
 type ProfileService struct {
@@ -18,6 +18,10 @@ func NewProfileService(repo ProfileRepository) *ProfileService {
 	return &ProfileService{repo: repo}
 }
 
-func (s *ProfileService) GetProfileByEmail(ctx context.Context, email string) (model.User, model.Profile, error) {
+func (s *ProfileService) GetProfile(ctx context.Context, email string) (model.Profile, error) {
+	return s.repo.UserProfile(ctx, email)
+}
+
+func (s *ProfileService) EditProfile(ctx context.Context, email string) (model.Profile, error) {
 	return s.repo.UserProfile(ctx, email)
 }
