@@ -18,7 +18,6 @@ type Claims struct {
 
 func NewClaims(id uuid.UUID, email string) *Claims {
 	return &Claims{
-		ID:    id,
 		Email: email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    os.Getenv("JWT_ISSUER"),

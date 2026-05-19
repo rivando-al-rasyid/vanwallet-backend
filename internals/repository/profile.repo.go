@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,10 +24,17 @@ func NewProfileRepo(db *pgxpool.Pool) *ProfileRepo {
 
 func (p *ProfileRepo) UserProfile(ctx context.Context, email string) (model.Profile, error) {
 	sql := `SELECT
-        p.user_id, p.full_name, p.phone, p.photo, p.created_at, p.updated_at
-	FROM users u 
-	WHERE profiles.user_id = u.id 
-  	AND u.email = $1;`
+    p.full_name,
+    p.phone,
+    p.photo,
+    p.created_at,
+    p.updated_at
+FROM
+    profiles p
+JOIN
+    users u ON p.user_id = u.id
+WHERE
+    u.email = $1;`
 
 	var user model.User
 	var profile model.Profile
@@ -47,32 +56,65 @@ func (p *ProfileRepo) UserProfile(ctx context.Context, email string) (model.Prof
 	return profile, nil
 }
 
-func (p *ProfileRepo) EditProfile(ctx context.Context, email string) (model.Profile, error) {
+func (p *ProfileRepo) EditProfile(ctx context.Context, email string, updates map[string]any) (model.Profile, error) {
+	if len(updates) == 0 {
+		return model.Profile{}, fmt.Errorf("EditProfile: no fields to update")
+	}
 
-	sql := `UPDATE profiles
-	SET 
-    full_name = $2, 
-    phone = $3, 
-    photo = $4, 
-    updated_at = now() 
-	FROM users u 
-	WHERE profiles.user_id = u.id 
-  	AND u.email = $1;
-`
-	var user model.User
-	var profile model.Profile
+	allowed := map[string]bool{
+		"full_name": true,
+		"phone":     true,
+		"photo":     true,
+	}
 
-	err := p.db.QueryRow(ctx, sql, email).Scan(
-		&user.ID, &user.Email, &profile.UserID, &profile.FullName, &profile.Phone,
-		&profile.Photo, &profile.UpdatedAt,
+	var (
+		sb      strings.Builder
+		args    []any
+		counter int
 	)
 
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			// Mapping error database ke error domain aplikasi
-			return model.Profile{}, errors.New("user profile not found") // Gunakan custom error dari model Anda
+	args = append(args, email)
+	counter = 1
+
+	sb.WriteString(`UPDATE profiles SET `)
+
+	first := true
+
+	for col, val := range updates {
+		if !allowed[col] {
+			return model.Profile{}, fmt.Errorf("EditProfile: column '%s' is not updatable", col)
 		}
-		return model.Profile{}, err
+		if !first {
+			sb.WriteString(", ")
+		}
+		counter++
+		fmt.Fprintf(&sb, "%s = $%d", col, counter)
+		args = append(args, val)
+		first = false
+	}
+
+	sb.WriteString(`, updated_at = now()`)
+	sb.WriteString(`
+        FROM users u
+        WHERE profiles.user_id = u.id
+          AND u.email = $1
+        RETURNING
+            profiles.user_id,
+            profiles.full_name,
+            profiles.phone,
+            profiles.photo,
+            profiles.updated_at`)
+
+	var profile model.Profile
+	err := p.db.QueryRow(ctx, sb.String(), args...).Scan(
+		&profile.UserID,
+		&profile.FullName,
+		&profile.Phone,
+		&profile.Photo,
+		&profile.UpdatedAt,
+	)
+	if err != nil {
+		return model.Profile{}, fmt.Errorf("EditProfile: %w", err)
 	}
 
 	return profile, nil
