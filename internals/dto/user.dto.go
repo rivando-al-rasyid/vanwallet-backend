@@ -1,5 +1,7 @@
 package dto
 
+import "github.com/google/uuid"
+
 // RegisterRequest is the payload for creating a new user account.
 type RegisterRequest struct {
 	Email    string `json:"email"    validate:"required,email"`
@@ -19,6 +21,6 @@ type LoginResponse struct {
 
 // UserResponse is the public-safe representation of a user.
 type UserResponse struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
+	ID    uuid.UUID `json:"id"`
+	Email string    `json:"email"`
 }

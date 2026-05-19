@@ -30,7 +30,7 @@ func (p *ProfileController) GetProfile(ctx *gin.Context) {
 
 	email := claims.(pkg.Claims).Email
 
-	user, profile, err := p.profileservice.GetProfileByEmail(ctx.Request.Context(), email)
+	_, profile, err := p.profileservice.GetProfileByEmail(ctx.Request.Context(), email)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, dto.Response{
 			Message: "Failed to fetch profile",
@@ -40,14 +40,12 @@ func (p *ProfileController) GetProfile(ctx *gin.Context) {
 		return
 	}
 
-	res := dto.Profile{
-		ID:        user.Id,
-		Email:     user.Email,
-		FullName:  profile.FullName,
-		Phone:     profile.Phone,
-		Photo:     profile.Photo,
-		CreatedAt: profile.CreatedAt,
-		UpdatedAt: profile.UpdatedAt,
+	res := dto.ProfileResponse{
+		ID:       profile.ID,
+		UserID:   profile.UserID,
+		FullName: profile.FullName,
+		Phone:    profile.Phone,
+		Photo:    profile.Photo,
 	}
 	ctx.JSON(http.StatusOK, dto.Response{
 		Data:    res,

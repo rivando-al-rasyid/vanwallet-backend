@@ -34,10 +34,10 @@ func (p *ProfileRepo) UserProfile(ctx context.Context, email string) (model.User
 	var profile model.Profile
 
 	err := p.db.QueryRow(ctx, sql, email).Scan(
-		&user.Id,
+		&user.ID,
 		&user.Email,
-		&profile.Id,
-		&profile.UserId,
+		&profile.ID,
+		&profile.UserID,
 		&profile.FullName,
 		&profile.Phone,
 		&profile.Photo,

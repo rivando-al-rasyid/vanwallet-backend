@@ -16,59 +16,41 @@ func NewAuthService(authRepo *repository.Authrepo) *AuthService {
 	return &AuthService{authRepo: authRepo}
 }
 
-func (a *AuthService) Register(ctx context.Context, user dto.NewUser) (dto.User, error) {
+func (a *AuthService) Register(ctx context.Context, user dto.RegisterRequest) (dto.UserResponse, error) {
 	var hc pkg.HashConfig
 	hc.UseRecommended()
 	hashedPwd := hc.GenHash(user.Password)
 
-	newUser, err := a.authRepo.Register(ctx, user.Email, hashedPwd)
+	registerResult, err := a.authRepo.Register(ctx, user.Email, hashedPwd)
 	if err != nil {
-		return dto.User{}, err
+		return dto.UserResponse{}, err
 	}
 
-	return dto.User{
-		Id:        newUser.Id,
-		Email:     newUser.Email,
-		CreatedAt: newUser.CreatedAt,
+	return dto.UserResponse{
+		ID:    registerResult.ID,
+		Email: registerResult.Email,
 	}, nil
 }
 
-func (a *AuthService) Login(ctx context.Context, user dto.NewUser) (string, error) {
-
+func (a *AuthService) Login(ctx context.Context, user dto.LoginRequest) (string, error) {
 	login, err := a.authRepo.Login(ctx, user.Email)
 	if err != nil {
 		return "", err
 	}
-	var hc pkg.HashConfig
 
+	var hc pkg.HashConfig
 	if err := hc.Compare(user.Password, login.Password); err != nil {
 		return "", err
 	}
-	claims := pkg.NewClaims(login.Id, user.Email)
+
+	claims := pkg.NewClaims(login.ID, user.Email)
 	token, err := claims.GenJWT()
 	if err != nil {
 		return "", err
 	}
 	return token, nil
-
 }
 
-func (a *AuthService) Logout(ctx context.Context, user dto.NewUser) (string, error) {
-
-	login, err := a.authRepo.Login(ctx, user.Email)
-	if err != nil {
-		return "", err
-	}
-	var hc pkg.HashConfig
-
-	if err := hc.Compare(user.Password, login.Password); err != nil {
-		return "", err
-	}
-	claims := pkg.NewClaims(login.Id, user.Email)
-	token, err := claims.GenJWT()
-	if err != nil {
-		return "", err
-	}
-	return token, nil
-
+func (a *AuthService) Logout(ctx context.Context, userID string) error {
+	return a.authRepo.ClearToken(ctx, userID)
 }
