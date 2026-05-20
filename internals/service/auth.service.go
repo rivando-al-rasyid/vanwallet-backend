@@ -12,6 +12,7 @@ type AuthRepo interface {
 	Register(ctx context.Context, email, password string) (model.User, error)
 	Login(ctx context.Context, email string) (model.User, error)
 	ClearToken(ctx context.Context, userID string) error
+	GetUserPin(ctx context.Context, email string) (model.UserPin, error)
 }
 
 type AuthService struct {
@@ -55,6 +56,10 @@ func (a *AuthService) Login(ctx context.Context, user dto.LoginRequest) (string,
 		return "", err
 	}
 	return token, nil
+}
+
+func (a *AuthService) GetUserPin(ctx context.Context, email string) (model.UserPin, error) {
+	return a.authRepo.GetUserPin(ctx, email)
 }
 
 func (a *AuthService) Logout(ctx context.Context, userID string) error {

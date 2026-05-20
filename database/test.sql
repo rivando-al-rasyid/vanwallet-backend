@@ -11,3 +11,11 @@ FROM
 WHERE
     u.email = 'vando@example.com';
 
+SELECT
+    up.pin_hash
+FROM
+    user_pins up
+    JOIN users u ON up.user_id = u.id
+WHERE
+    u.email = 'vando@example.com';
+

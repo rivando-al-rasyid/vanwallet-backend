@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/model"
 )
@@ -22,7 +24,7 @@ func (a *Authrepo) Register(ctx context.Context, email, hashpwd string) (model.U
 			VALUES ($1, $2)
 			RETURNING id, email, created_at
 		),
-		new_profile AS (
+		new_profiles AS (
 			INSERT INTO profiles (user_id)
 			SELECT id FROM new_user
 		),
@@ -58,6 +60,28 @@ func (a *Authrepo) Login(ctx context.Context, email string) (model.User, error) 
 		return model.User{}, err
 	}
 	return user, nil
+}
+
+func (a *Authrepo) GetUserPin(ctx context.Context, email string) (model.UserPin, error) {
+	sql := `SELECT
+    up.pin_hash
+FROM
+    user_pins up
+    JOIN users u ON up.user_id = u.id
+WHERE
+    u.email = $1;`
+
+	var userpin model.UserPin
+
+	err := a.db.QueryRow(ctx, sql, email).Scan(&userpin.PinHash)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.UserPin{}, errors.New("user pin not found")
+		}
+		return model.UserPin{}, err
+	}
+
+	return userpin, nil
 }
 
 func (a *Authrepo) ClearToken(ctx context.Context, userID string) error {
