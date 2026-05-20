@@ -6,9 +6,18 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/dto"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/pkg"
+	"github.com/rivando-al-rasyid/vanwallet-backend/internals/service"
 )
 
-func (p *ProfileController) GetData(ctx *gin.Context) {
+type DashboardController struct {
+	dashboardservice *service.DashboardService
+}
+
+func NewDashboardController(dashboardservice *service.DashboardService) *DashboardController {
+	return &DashboardController{dashboardservice: dashboardservice}
+}
+
+func (d *DashboardController) GetData(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, dto.Response{
@@ -21,11 +30,11 @@ func (p *ProfileController) GetData(ctx *gin.Context) {
 
 	email := claims.(pkg.Claims).Email
 
-	profile, err := p.profileservice.GetProfile(ctx.Request.Context(), email)
+	Dashboard, err := d.dashboardservice.GetData(ctx, email)
 	if err != nil {
-		if err.Error() == "user profile not found" {
+		if err.Error() == "Data Not not found" {
 			ctx.JSON(http.StatusNotFound, dto.Response{
-				Message: "Failed to fetch profile",
+				Message: "Failed to fetch transaction Data ",
 				Success: false,
 				Error:   "Data tidak ditemukan",
 			})
@@ -33,20 +42,15 @@ func (p *ProfileController) GetData(ctx *gin.Context) {
 		}
 
 		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Failed to fetch profile",
+			Message: "Failed to fetch transaction ",
 			Success: false,
 			Error:   "Internal server error",
 		})
 		return
 	}
 
-	res := dto.ProfileResponse{
-		FullName: profile.FullName,
-		Phone:    profile.Phone,
-		Photo:    profile.Photo,
-	}
 	ctx.JSON(http.StatusOK, dto.Response{
-		Data:    res,
+		Data:    Dashboard,
 		Message: "Profile successfully retrieved",
 		Success: true,
 	})

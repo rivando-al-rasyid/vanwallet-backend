@@ -17,44 +17,48 @@ func NewDashboardRepo(db *pgxpool.Pool) *DashboardRepo {
 	return &DashboardRepo{db: db}
 }
 
-func (p *DashboardRepo) UserProfile(ctx context.Context, email string) (model.Profile, error) {
+func (p *DashboardRepo) GetData(ctx context.Context, email string) (model.Dashboard, error) {
+	// We isolate the aggregations into CTEs to avoid duplicating wallet balances
+	// if a user has multiple transactions, then tie it all back to the TargetUser.
 	sql := `WITH TargetUser AS (
-	SELECT id FROM users WHERE email = $1
-),
-UserWallets AS (
-    SELECT w.id, w.balance
-    FROM wallets w
-    INNER JOIN TargetUser tu ON w.user_id = tu.id
-)
-SELECT 
-    (SELECT COALESCE(SUM(balance), 0) FROM UserWallets) AS current_balance,
-    
-    COALESCE(SUM(CASE 
-        WHEN t.direction = 'IN' AND t.status = 'SUCCESS' THEN t.amount 
-        ELSE 0 
-    END), 0) AS total_income,
-    
-    COALESCE(SUM(CASE 
-        WHEN t.direction = 'OUT' AND t.status = 'SUCCESS' THEN (t.amount + t.admin_fee) 
-        ELSE 0 
-    END), 0) AS total_expense
+        SELECT id FROM users WHERE email = $1
+    ),
+    UserWallets AS (
+        SELECT id, balance FROM wallets WHERE user_id IN (SELECT id FROM TargetUser)
+    ),
+    WalletAgg AS (
+        SELECT COALESCE(SUM(balance), 0) AS current_balance 
+        FROM UserWallets
+    ),
+    TransactionAgg AS (
+        SELECT 
+            COALESCE(SUM(CASE WHEN direction = 'IN' AND status = 'SUCCESS' THEN amount ELSE 0 END), 0) AS total_income,
+            COALESCE(SUM(CASE WHEN direction = 'OUT' AND status = 'SUCCESS' THEN (amount + admin_fee) ELSE 0 END), 0) AS total_expense
+        FROM transactions 
+        WHERE wallet_id IN (SELECT id FROM UserWallets)
+    )
+    SELECT 
+        wa.current_balance,
+        ta.total_income,
+        ta.total_expense
+    FROM TargetUser tu
+    CROSS JOIN WalletAgg wa
+    CROSS JOIN TransactionAgg ta;`
 
-FROM transactions t
-WHERE t.wallet_id IN (SELECT id FROM UserWallets);`
-
-	var profile model.Profile
+	var dashboard model.Dashboard
 
 	err := p.db.QueryRow(ctx, sql, email).Scan(
-		&profile.FullName, &profile.Phone,
-		&profile.Photo, &profile.CreatedAt, &profile.UpdatedAt,
+		&dashboard.CurrentBalance,
+		&dashboard.TotalIncome,
+		&dashboard.TotalExpense,
 	)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return model.Profile{}, errors.New("user profile not found")
+			return model.Dashboard{}, errors.New("user profile not found")
 		}
-		return model.Profile{}, err
+		return model.Dashboard{}, err
 	}
 
-	return profile, nil
+	return dashboard, nil
 }
