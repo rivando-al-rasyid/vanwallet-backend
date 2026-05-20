@@ -32,10 +32,19 @@ func (p *ProfileController) GetProfile(ctx *gin.Context) {
 
 	profile, err := p.profileservice.GetProfile(ctx.Request.Context(), email)
 	if err != nil {
+		if err.Error() == "user profile not found" {
+			ctx.JSON(http.StatusNotFound, dto.Response{
+				Message: "Failed to fetch profile",
+				Success: false,
+				Error:   "Data tidak ditemukan",
+			})
+			return
+		}
+
 		ctx.JSON(http.StatusInternalServerError, dto.Response{
 			Message: "Failed to fetch profile",
 			Success: false,
-			Error:   "data Tidak Ditemukan",
+			Error:   "Internal server error",
 		})
 		return
 	}
@@ -51,7 +60,6 @@ func (p *ProfileController) GetProfile(ctx *gin.Context) {
 		Success: true,
 	})
 }
-
 func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {

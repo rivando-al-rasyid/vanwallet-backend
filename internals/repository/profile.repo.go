@@ -36,18 +36,15 @@ JOIN
 WHERE
     u.email = $1;`
 
-	var user model.User
 	var profile model.Profile
 
 	err := p.db.QueryRow(ctx, sql, email).Scan(
-		&user.ID, &user.Email,
-		&profile.ID, &profile.UserID, &profile.FullName, &profile.Phone,
+		&profile.FullName, &profile.Phone,
 		&profile.Photo, &profile.CreatedAt, &profile.UpdatedAt,
 	)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// Mapping error database ke error domain aplikasi
 			return model.Profile{}, errors.New("user profile not found")
 		}
 		return model.Profile{}, err
