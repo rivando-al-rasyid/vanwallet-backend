@@ -1,0 +1,17 @@
+basePath: /
+host: localhost:8080
+info:
+  contact: {}
+  description: Backend Vanwallet  using Gin
+  license:
+    name: MIT
+  title: Vanwallet
+  version: "1.0"
+paths: {}
+securityDefinitions:
+  ApiKeyAuth:
+    description: Bearer token used for authorization
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

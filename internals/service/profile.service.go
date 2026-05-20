@@ -9,6 +9,7 @@ import (
 type ProfileRepository interface {
 	UserProfile(ctx context.Context, email string) (model.Profile, error)
 	EditProfile(ctx context.Context, email string, updates map[string]any) (model.Profile, error)
+	EditPin(ctx context.Context, email string, updates map[string]any) (model.UserPin, error)
 }
 
 type ProfileService struct {
@@ -25,4 +26,8 @@ func (s *ProfileService) GetProfile(ctx context.Context, email string) (model.Pr
 
 func (s *ProfileService) EditProfile(ctx context.Context, email string, updates map[string]any) (model.Profile, error) {
 	return s.repo.EditProfile(ctx, email, updates)
+}
+
+func (s *ProfileService) EditPin(ctx context.Context, email string, updates map[string]any) (model.UserPin, error) {
+	return s.repo.EditPin(ctx, email, updates)
 }
