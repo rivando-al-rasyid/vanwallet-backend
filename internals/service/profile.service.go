@@ -9,7 +9,8 @@ import (
 type ProfileRepository interface {
 	UserProfile(ctx context.Context, email string) (model.Profile, error)
 	EditProfile(ctx context.Context, email string, updates map[string]any) (model.Profile, error)
-	EditPin(ctx context.Context, email string, updates map[string]any) (model.UserPin, error)
+	EditPin(ctx context.Context, email string, newPin string) (model.UserPin, error)
+	EditPassword(ctx context.Context, email string, newPassword string) (model.User, error)
 }
 
 type ProfileService struct {
@@ -28,6 +29,9 @@ func (s *ProfileService) EditProfile(ctx context.Context, email string, updates 
 	return s.repo.EditProfile(ctx, email, updates)
 }
 
-func (s *ProfileService) EditPin(ctx context.Context, email string, updates map[string]any) (model.UserPin, error) {
-	return s.repo.EditPin(ctx, email, updates)
+func (s *ProfileService) EditPin(ctx context.Context, email string, newPin string) (model.UserPin, error) {
+	return s.repo.EditPin(ctx, email, newPin)
+}
+func (s *ProfileService) EditPassword(ctx context.Context, email string, newPassword string) (model.User, error) {
+	return s.repo.EditPassword(ctx, email, newPassword)
 }

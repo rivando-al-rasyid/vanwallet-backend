@@ -21,12 +21,9 @@ WHERE
 
 -- Update rows in 'user_pins' where condition is met
 UPDATE
-    user_pins
+    users
 SET
-    pin_hash = 'new_value'
-FROM
-    users u
+    PASSWORD = 'new_value'
 WHERE
-    user_pins.user_id = u.id
-    AND u.email = 'vando@example.com';
+    email = 'vando@example.com';
 

@@ -444,12 +444,6 @@ const docTemplate = `{
                 "pin_hash"
             ],
             "properties": {
-                "failed_attempts": {
-                    "type": "integer"
-                },
-                "locked_until": {
-                    "type": "string"
-                },
                 "pin_hash": {
                     "type": "string"
                 }

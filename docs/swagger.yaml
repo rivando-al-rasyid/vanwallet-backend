@@ -47,10 +47,6 @@ definitions:
     type: object
   dto.SetPinRequest:
     properties:
-      failed_attempts:
-        type: integer
-      locked_until:
-        type: string
       pin_hash:
         type: string
     required:

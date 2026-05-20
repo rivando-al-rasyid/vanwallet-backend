@@ -186,29 +186,48 @@ func (p *ProfileController) EditPin(ctx *gin.Context) {
 		return
 	}
 
-	updates := map[string]any{}
-	if body.PinHash != nil {
-		updates["pin_hash"] = body.PinHash
-	}
-	if body.FailedAttempts != nil {
-		updates["failed_attempts"] = body.FailedAttempts
-	}
-	if body.LockedUntil != nil {
-		updates["locked_until"] = body.LockedUntil
-	}
-	if len(updates) == 0 {
-		ctx.JSON(http.StatusBadRequest, dto.Response{
-			Message: "No fields to update",
+	_, err := p.profileservice.EditPin(ctx.Request.Context(), email, *body.PinHash)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, dto.Response{
+			Message: "Failed to update Pin",
 			Success: false,
-			Error:   "Request body is empty",
+			Error:   err.Error(),
 		})
 		return
 	}
 
-	_, err := p.profileservice.EditPin(ctx.Request.Context(), email, updates)
+	ctx.JSON(http.StatusOK, dto.Response{
+		Message: "Profile successfully updated",
+		Success: true,
+	})
+}
+
+func (p *ProfileController) EditPassword(ctx *gin.Context) {
+	claims, exists := ctx.Get("claims")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, dto.Response{
+			Message: "Unauthorized",
+			Success: false,
+			Error:   "Missing claims",
+		})
+		return
+	}
+	email := claims.(pkg.Claims).Email
+
+	var body dto.ChangePasswordRequest
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.JSON(http.StatusBadRequest, dto.Response{
+			Message: "Invalid request body",
+			Success: false,
+			Error:   "data tidak ada",
+		})
+		return
+	}
+
+	_, err := p.profileservice.EditPassword(ctx.Request.Context(), email, body.Password)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Failed to update Pin",
+			Message: "Failed to update Password",
 			Success: false,
 			Error:   err.Error(),
 		})

@@ -117,69 +117,65 @@ func (p *ProfileRepo) EditProfile(ctx context.Context, email string, updates map
 	return profile, nil
 }
 
-func (p *ProfileRepo) EditPin(ctx context.Context, email string, updates map[string]any) (model.UserPin, error) {
+// EditPin now has a single, explicit responsibility: updating the PIN hash.
+func (p *ProfileRepo) EditPin(ctx context.Context, email string, newPinHash string) (model.UserPin, error) {
 
-	if len(updates) == 0 {
-		return model.UserPin{}, fmt.Errorf("EditPin: no fields to update")
-	}
-
-	// FIX 1: Corrected spelling to "failed_attempts"
-	allowed := map[string]bool{
-		"pin_hash":        true,
-		"failed_attempts": true,
-		"locked_until":    true,
-	}
-
-	var (
-		sb      strings.Builder
-		args    []any
-		counter int
-	)
-
-	args = append(args, email)
-	counter = 1
-
-	sb.WriteString(`UPDATE user_pins SET `)
-
-	first := true
-
-	for col, val := range updates {
-		if !allowed[col] {
-			return model.UserPin{}, fmt.Errorf("error: column '%s' is not updatable", col)
-		}
-		if !first {
-			sb.WriteString(", ")
-		}
-		counter++
-		fmt.Fprintf(&sb, "%s = $%d", col, counter)
-		args = append(args, val)
-		first = false
-	}
-
-	sb.WriteString(`, updated_at = now()`)
-
-	sb.WriteString(`
+	sql := `
+        UPDATE user_pins 
+        SET 
+            pin_hash = $2, 
+            updated_at = now()
         FROM users u
-        WHERE user_pins.user_id = u.id
+        WHERE user_pins.user_id = u.id 
           AND u.email = $1
         RETURNING
             user_pins.pin_hash,
             user_pins.failed_attempts,
             user_pins.locked_until,
-            user_pins.updated_at`)
+            user_pins.updated_at;
+    `
 
 	var userPin model.UserPin
 
-	err := p.db.QueryRow(ctx, sb.String(), args...).Scan(
+	err := p.db.QueryRow(ctx, sql, email, newPinHash).Scan(
 		&userPin.PinHash,
 		&userPin.FailedAttempts,
 		&userPin.LockedUntil,
 		&userPin.UpdatedAt,
 	)
+
 	if err != nil {
-		// FIX 3: Changed "EditProfile" to "EditPin" for accurate logging
 		return model.UserPin{}, fmt.Errorf("EditPin: %w", err)
 	}
 
 	return userPin, nil
+}
+
+func (p *ProfileRepo) EditPassword(ctx context.Context, email string, newPassword string) (model.User, error) {
+
+	sql := `
+        UPDATE users
+        SET
+            password = $2,
+            updated_at = NOW()
+        WHERE
+            email = $1
+        RETURNING 
+            full_name, phone, photo, created_at, updated_at;
+    `
+
+	var user model.User
+
+	err := p.db.QueryRow(ctx, sql, email, newPassword).Scan(
+		&user.Password, &user.UpdatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.User{}, errors.New("user profile not found")
+		}
+		return model.User{}, err
+	}
+
+	return user, nil
 }
