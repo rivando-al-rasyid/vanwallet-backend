@@ -118,10 +118,12 @@ func (p *ProfileRepo) EditProfile(ctx context.Context, email string, updates map
 }
 
 func (p *ProfileRepo) EditPin(ctx context.Context, email string, updates map[string]any) (model.UserPin, error) {
+
 	if len(updates) == 0 {
-		return model.UserPin{}, fmt.Errorf("EditProfile: no fields to update")
+		return model.UserPin{}, fmt.Errorf("EditPin: no fields to update")
 	}
 
+	// FIX 1: Corrected spelling to "failed_attempts"
 	allowed := map[string]bool{
 		"pin_hash":        true,
 		"failed_attempts": true,
@@ -143,7 +145,7 @@ func (p *ProfileRepo) EditPin(ctx context.Context, email string, updates map[str
 
 	for col, val := range updates {
 		if !allowed[col] {
-			return model.UserPin{}, fmt.Errorf("EditProfile: column '%s' is not updatable", col)
+			return model.UserPin{}, fmt.Errorf("error: column '%s' is not updatable", col)
 		}
 		if !first {
 			sb.WriteString(", ")
@@ -155,27 +157,29 @@ func (p *ProfileRepo) EditPin(ctx context.Context, email string, updates map[str
 	}
 
 	sb.WriteString(`, updated_at = now()`)
+
 	sb.WriteString(`
         FROM users u
         WHERE user_pins.user_id = u.id
           AND u.email = $1
         RETURNING
-            user_pins.user_id,
             user_pins.pin_hash,
             user_pins.failed_attempts,
             user_pins.locked_until,
             user_pins.updated_at`)
 
-	var user_pin model.UserPin
+	var userPin model.UserPin
+
 	err := p.db.QueryRow(ctx, sb.String(), args...).Scan(
-		&user_pin.UserID,
-		&user_pin.PinHash,
-		&user_pin.FailedAttempts,
-		&user_pin.UpdatedAt,
+		&userPin.PinHash,
+		&userPin.FailedAttempts,
+		&userPin.LockedUntil,
+		&userPin.UpdatedAt,
 	)
 	if err != nil {
-		return model.UserPin{}, fmt.Errorf("EditProfile: %w", err)
+		// FIX 3: Changed "EditProfile" to "EditPin" for accurate logging
+		return model.UserPin{}, fmt.Errorf("EditPin: %w", err)
 	}
 
-	return user_pin, nil
+	return userPin, nil
 }

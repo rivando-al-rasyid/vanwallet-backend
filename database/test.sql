@@ -19,3 +19,14 @@ FROM
 WHERE
     u.email = 'vando@example.com';
 
+-- Update rows in 'user_pins' where condition is met
+UPDATE
+    user_pins
+SET
+    pin_hash = 'new_value'
+FROM
+    users u
+WHERE
+    user_pins.user_id = u.id
+    AND u.email = 'vando@example.com';
+

@@ -17,6 +17,18 @@ func NewProfileController(profileservice *service.ProfileService) *ProfileContro
 	return &ProfileController{profileservice: profileservice}
 }
 
+// GetProfile godoc
+//
+//	@Summary		Get user profile
+//	@Description	Retrieve the profile information of the authenticated user
+//	@Tags			Profile
+//	@Produce		json
+//	@Security		ApiKeyAuth
+//	@Success		200	{object}	dto.Response{data=dto.ProfileResponse}
+//	@Failure		401	{object}	dto.Response
+//	@Failure		404	{object}	dto.Response
+//	@Failure		500	{object}	dto.Response
+//	@Router			/profile/ [get]
 func (p *ProfileController) GetProfile(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
@@ -60,6 +72,21 @@ func (p *ProfileController) GetProfile(ctx *gin.Context) {
 		Success: true,
 	})
 }
+
+// EditProfile godoc
+//
+//	@Summary		Update user profile
+//	@Description	Update one or more profile fields (full_name, phone, photo) of the authenticated user
+//	@Tags			Profile
+//	@Accept			json
+//	@Produce		json
+//	@Security		ApiKeyAuth
+//	@Param			body	body		dto.UpdateProfileRequest	true	"Profile update payload (all fields optional)"
+//	@Success		200		{object}	dto.Response{data=dto.ProfileResponse}
+//	@Failure		400		{object}	dto.Response
+//	@Failure		401		{object}	dto.Response
+//	@Failure		500		{object}	dto.Response
+//	@Router			/profile/ [post]
 func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
@@ -123,6 +150,20 @@ func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	})
 }
 
+// EditPin godoc
+//
+//	@Summary		Update user PIN
+//	@Description	Update the PIN of the authenticated user
+//	@Tags			Profile
+//	@Accept			json
+//	@Produce		json
+//	@Security		ApiKeyAuth
+//	@Param			body	body		dto.SetPinRequest	true	"PIN update payload"
+//	@Success		200		{object}	dto.Response
+//	@Failure		400		{object}	dto.Response
+//	@Failure		401		{object}	dto.Response
+//	@Failure		500		{object}	dto.Response
+//	@Router			/profile/pin [post]
 func (p *ProfileController) EditPin(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
@@ -135,7 +176,7 @@ func (p *ProfileController) EditPin(ctx *gin.Context) {
 	}
 	email := claims.(pkg.Claims).Email
 
-	var body dto.UpdateProfileRequest
+	var body dto.SetPinRequest
 	if err := ctx.ShouldBindJSON(&body); err != nil {
 		ctx.JSON(http.StatusBadRequest, dto.Response{
 			Message: "Invalid request body",
@@ -146,16 +187,15 @@ func (p *ProfileController) EditPin(ctx *gin.Context) {
 	}
 
 	updates := map[string]any{}
-	if body.FullName != nil {
-		updates["full_name"] = body.FullName
+	if body.PinHash != nil {
+		updates["pin_hash"] = body.PinHash
 	}
-	if body.Phone != nil {
-		updates["phone"] = body.Phone
+	if body.FailedAttempts != nil {
+		updates["failed_attempts"] = body.FailedAttempts
 	}
-	if body.Photo != nil {
-		updates["photo"] = body.Photo
+	if body.LockedUntil != nil {
+		updates["locked_until"] = body.LockedUntil
 	}
-
 	if len(updates) == 0 {
 		ctx.JSON(http.StatusBadRequest, dto.Response{
 			Message: "No fields to update",
@@ -165,10 +205,10 @@ func (p *ProfileController) EditPin(ctx *gin.Context) {
 		return
 	}
 
-	profile, err := p.profileservice.EditProfile(ctx.Request.Context(), email, updates)
+	_, err := p.profileservice.EditPin(ctx.Request.Context(), email, updates)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Failed to update profile",
+			Message: "Failed to update Pin",
 			Success: false,
 			Error:   err.Error(),
 		})
@@ -176,11 +216,6 @@ func (p *ProfileController) EditPin(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, dto.Response{
-		Data: dto.ProfileResponse{
-			FullName: profile.FullName,
-			Phone:    profile.Phone,
-			Photo:    profile.Photo,
-		},
 		Message: "Profile successfully updated",
 		Success: true,
 	})

@@ -18,5 +18,6 @@ func ProfileRouter(router *gin.Engine, db *pgxpool.Pool) {
 
 	profileRouter.GET("/", middleware.VerifyToken, profCont.GetProfile)
 	profileRouter.POST("/", middleware.VerifyToken, profCont.EditProfile)
+	profileRouter.POST("/pin", middleware.VerifyToken, profCont.EditPin)
 
 }

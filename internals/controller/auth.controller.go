@@ -18,6 +18,18 @@ func NewAuthController(authservice *service.AuthService) *AuthController {
 	return &AuthController{authservice: authservice}
 }
 
+// Register godoc
+//
+//	@Summary		Register a new user
+//	@Description	Create a new user account with email and password
+//	@Tags			Auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		dto.RegisterRequest	true	"Register payload"
+//	@Success		201		{object}	dto.Response{data=dto.UserResponse}
+//	@Failure		400		{object}	dto.Response
+//	@Failure		500		{object}	dto.Response
+//	@Router			/auth/register [post]
 func (a *AuthController) Register(ctx *gin.Context) {
 	var body dto.RegisterRequest
 
@@ -49,6 +61,18 @@ func (a *AuthController) Register(ctx *gin.Context) {
 	})
 }
 
+// Login godoc
+//
+//	@Summary		Login user
+//	@Description	Authenticate a user and return a JWT token
+//	@Tags			Auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		dto.LoginRequest	true	"Login payload"
+//	@Success		200		{object}	dto.Response{data=dto.LoginResponse}
+//	@Failure		400		{object}	dto.Response
+//	@Failure		401		{object}	dto.Response
+//	@Router			/auth/login [post]
 func (a *AuthController) Login(ctx *gin.Context) {
 	var body dto.LoginRequest
 
@@ -80,6 +104,18 @@ func (a *AuthController) Login(ctx *gin.Context) {
 	})
 }
 
+// GetPIN godoc
+//
+//	@Summary		Get user PIN hash
+//	@Description	Retrieve the hashed PIN of the authenticated user
+//	@Tags			Auth
+//	@Produce		json
+//	@Security		ApiKeyAuth
+//	@Success		200	{object}	dto.Response{data=string}
+//	@Failure		401	{object}	dto.Response
+//	@Failure		404	{object}	dto.Response
+//	@Failure		500	{object}	dto.Response
+//	@Router			/auth/pin [get]
 func (a *AuthController) GetPIN(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
