@@ -161,7 +161,7 @@ func (p *ProfileRepo) EditPassword(ctx context.Context, email string, newPasswor
         WHERE
             email = $1
         RETURNING 
-            full_name, phone, photo, created_at, updated_at;
+            password, updated_at;
     `
 
 	var user model.User

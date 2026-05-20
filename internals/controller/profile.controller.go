@@ -235,7 +235,7 @@ func (p *ProfileController) EditPassword(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, dto.Response{
-		Message: "Profile successfully updated",
+		Message: "Password successfully updated",
 		Success: true,
 	})
 }
