@@ -4,15 +4,22 @@ import (
 	"context"
 
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/dto"
+	"github.com/rivando-al-rasyid/vanwallet-backend/internals/model"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/pkg"
-	"github.com/rivando-al-rasyid/vanwallet-backend/internals/repository"
 )
 
-type AuthService struct {
-	authRepo *repository.Authrepo
+type AuthRepo interface {
+	Register(ctx context.Context, email, password string) (model.User, error)
+	Login(ctx context.Context, email string) (model.User, error)
+	ClearToken(ctx context.Context, userID string) error
+	GetUserPin(ctx context.Context, email string) (model.UserPin, error)
 }
 
-func NewAuthService(authRepo *repository.Authrepo) *AuthService {
+type AuthService struct {
+	authRepo AuthRepo
+}
+
+func NewAuthService(authRepo AuthRepo) *AuthService {
 	return &AuthService{authRepo: authRepo}
 }
 
@@ -49,6 +56,10 @@ func (a *AuthService) Login(ctx context.Context, user dto.LoginRequest) (string,
 		return "", err
 	}
 	return token, nil
+}
+
+func (a *AuthService) GetUserPin(ctx context.Context, email string) (model.UserPin, error) {
+	return a.authRepo.GetUserPin(ctx, email)
 }
 
 func (a *AuthService) Logout(ctx context.Context, userID string) error {

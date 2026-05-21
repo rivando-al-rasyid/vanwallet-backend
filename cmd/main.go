@@ -11,6 +11,20 @@ import (
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/router"
 )
 
+// @title						Vanwallet
+// @version						1.0
+// @description					Backend Vanwallet  using Gin
+
+// @license.name				MIT
+
+// @host						localhost:8080
+// @BasePath					/
+
+// @securityDefinitions.apikey	ApiKeyAuth
+// @in							header
+// @name						Authorization
+// @description					Bearer token used for authorization
+
 func main() {
 	// Load .env — tidak fatal jika tidak ada (untuk production compatibility)
 	if err := godotenv.Load(); err != nil {

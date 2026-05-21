@@ -14,6 +14,10 @@ type LoginRequest struct {
 	Password string `json:"password" validate:"required"`
 }
 
+type ChangePasswordRequest struct {
+	Password string `json:"password" validate:"required,min=8"`
+}
+
 // LoginResponse is returned after a successful login.
 type LoginResponse struct {
 	Token string `json:"token"`
