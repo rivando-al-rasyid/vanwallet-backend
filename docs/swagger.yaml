@@ -1,5 +1,28 @@
 basePath: /
 definitions:
+  dto.CreateTransactionRequest:
+    properties:
+      admin_fee:
+        minimum: 0
+        type: integer
+      amount:
+        type: integer
+      direction:
+        enum:
+        - TOPUP
+        - IN
+        - OUT
+        type: string
+      note:
+        maxLength: 255
+        type: string
+      wallet_id:
+        type: string
+    required:
+    - amount
+    - direction
+    - wallet_id
+    type: object
   dto.LoginRequest:
     properties:
       email:
@@ -52,14 +75,36 @@ definitions:
     required:
     - pin_hash
     type: object
-  dto.UpdateProfileRequest:
+  dto.TransactionListResponse:
     properties:
-      full_name:
-        minLength: 2
+      data:
+        items:
+          $ref: '#/definitions/dto.TransactionResponse'
+        type: array
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+    type: object
+  dto.TransactionResponse:
+    properties:
+      admin_fee:
+        type: integer
+      amount:
+        type: integer
+      created_at:
         type: string
-      phone:
+      direction:
         type: string
-      photo:
+      id:
+        type: string
+      note:
+        type: string
+      status:
+        type: string
+      wallet_id:
         type: string
     type: object
   dto.UserResponse:
@@ -214,16 +259,22 @@ paths:
       - Profile
     post:
       consumes:
-      - application/json
+      - multipart/form-data
       description: Update one or more profile fields (full_name, phone, photo) of
         the authenticated user
       parameters:
-      - description: Profile update payload (all fields optional)
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/dto.UpdateProfileRequest'
+      - description: Full name
+        in: formData
+        name: full_name
+        type: string
+      - description: Phone number (E.164)
+        in: formData
+        name: phone
+        type: string
+      - description: Profile photo (jpg/png/webp, max 2MB)
+        in: formData
+        name: photo
+        type: file
       produces:
       - application/json
       responses:
@@ -289,6 +340,127 @@ paths:
       summary: Update user PIN
       tags:
       - Profile
+  /transaction/:
+    get:
+      description: List all transactions for the authenticated user (optionally filtered
+        by wallet_id)
+      parameters:
+      - description: Filter by wallet UUID
+        in: query
+        name: wallet_id
+        type: string
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Items per page (default 10)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.TransactionListResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: List transactions
+      tags:
+      - Transaction
+    post:
+      consumes:
+      - application/json
+      description: Create a new transaction entry for a wallet owned by the authenticated
+        user
+      parameters:
+      - description: Transaction payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateTransactionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.TransactionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: Create a transaction
+      tags:
+      - Transaction
+  /transaction/:id:
+    get:
+      description: Get a single transaction by ID for the authenticated user
+      parameters:
+      - description: Transaction UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.TransactionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a transaction
+      tags:
+      - Transaction
 securityDefinitions:
   ApiKeyAuth:
     description: Bearer token used for authorization

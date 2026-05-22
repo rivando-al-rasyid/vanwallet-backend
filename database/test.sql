@@ -28,16 +28,14 @@ WHERE
     email = 'vando@example.com';
 
 WITH TargetUser AS (
-    -- 1. Cari user berdasarkan email
     SELECT
         id
     FROM
         users
     WHERE
-        email = 'user@example.com' -- Ganti dengan email yang dicari
+        email = 'user@example.com'
 ),
 UserWallets AS (
-    -- 2. Ambil semua wallet milik user tersebut
     SELECT
         w.id,
         w.balance

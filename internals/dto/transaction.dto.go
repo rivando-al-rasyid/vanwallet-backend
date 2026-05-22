@@ -19,3 +19,12 @@ type TransactionListResponse struct {
 	Page  int                   `json:"page"`
 	Limit int                   `json:"limit"`
 }
+
+// CreateTransactionRequest is the payload for creating a new transaction.
+type CreateTransactionRequest struct {
+	WalletID  string  `json:"wallet_id"  validate:"required,uuid4"`
+	Amount    int64   `json:"amount"     validate:"required,gt=0"`
+	Direction string  `json:"direction"  validate:"required,oneof=TOPUP IN OUT"`
+	AdminFee  int64   `json:"admin_fee"  validate:"omitempty,gte=0"`
+	Note      *string `json:"note"       validate:"omitempty,max=255"`
+}

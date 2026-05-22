@@ -16,6 +16,9 @@ func DashboardRouter(router *gin.Engine, db *pgxpool.Pool) {
 	dashServ := service.NewDashboardService(dashRepo)
 	dashCont := controller.NewDashboardController(dashServ)
 
+	// GET /dashboard/        → balance, income, expense summary
 	dashboardRouter.GET("/", middleware.VerifyToken, dashCont.GetData)
 
+	// GET /dashboard/report?range=7days|30days  → chart data
+	dashboardRouter.GET("/report", middleware.VerifyToken, dashCont.GetTransactionReport)
 }

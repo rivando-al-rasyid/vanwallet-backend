@@ -16,4 +16,5 @@ func MainRouter(router *gin.Engine, db *pgxpool.Pool) {
 	AuthRouter(router, db)
 	ProfileRouter(router, db)
 	DashboardRouter(router, db)
+	TransactionRouter(router, db)
 }
