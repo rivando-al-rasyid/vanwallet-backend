@@ -1,9 +1,19 @@
 package controller
 
 import (
+	"errors"
+	"fmt"
+	"log"
+	"mime/multipart"
 	"net/http"
+	"path"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/rivando-al-rasyid/vanwallet-backend/internals/config"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/dto"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/pkg"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/service"
@@ -78,15 +88,60 @@ func (p *ProfileController) GetProfile(ctx *gin.Context) {
 //	@Summary		Update user profile
 //	@Description	Update one or more profile fields (full_name, phone, photo) of the authenticated user
 //	@Tags			Profile
-//	@Accept			json
+//	@Accept			mpfd
 //	@Produce		json
 //	@Security		ApiKeyAuth
-//	@Param			body	body		dto.UpdateProfileRequest	true	"Profile update payload (all fields optional)"
-//	@Success		200		{object}	dto.Response{data=dto.ProfileResponse}
-//	@Failure		400		{object}	dto.Response
-//	@Failure		401		{object}	dto.Response
-//	@Failure		500		{object}	dto.Response
+//	@Param			full_name	formData	string	false	"Full name"
+//	@Param			phone		formData	string	false	"Phone number (E.164)"
+//	@Param			photo		formData	file	false	"Profile photo (jpg/png/webp, max 2MB)"
+//	@Success		200			{object}	dto.Response{data=dto.ProfileResponse}
+//	@Failure		400			{object}	dto.Response
+//	@Failure		401			{object}	dto.Response
+//	@Failure		500			{object}	dto.Response
 //	@Router			/profile/ [post]
+func (p *ProfileController) validateAndSavePhoto(ctx *gin.Context, photo *multipart.FileHeader, email string) (*string, error) {
+	if e := p.profileservice.ValidateUpload(2*config.MB, photo); e != nil {
+		log.Println(e.Error())
+		if errors.Is(e, config.ErrFileTooLarge) {
+			ctx.JSON(http.StatusUnprocessableEntity, dto.Response{
+				Message: "File too large",
+				Success: false,
+				Error:   "Photo must be under 2MB",
+			})
+			return nil, e
+		}
+		if errors.Is(e, config.ErrExtNotAllowed) {
+			ctx.JSON(http.StatusUnprocessableEntity, dto.Response{
+				Message: "Invalid file type",
+				Success: false,
+				Error:   "Only .jpg, .jpeg, .png, .webp are allowed",
+			})
+			return nil, e
+		}
+		ctx.JSON(http.StatusInternalServerError, dto.Response{
+			Message: "Error",
+			Success: false,
+			Error:   "Internal Server Error",
+		})
+		return nil, e
+	}
+
+	ext := path.Ext(photo.Filename)
+	filename := fmt.Sprintf("%s_photo_%d%s", strings.ToLower(strings.ReplaceAll(email, "@", "_")), time.Now().UnixNano(), ext)
+	dst := filepath.Join("public", "img", filename)
+	if err := ctx.SaveUploadedFile(photo, dst); err != nil {
+		log.Println("error: ", err.Error())
+		ctx.JSON(http.StatusInternalServerError, dto.Response{
+			Message: "Error",
+			Success: false,
+			Error:   "Internal Server Error",
+		})
+		return nil, err
+	}
+
+	photoURL := fmt.Sprintf("/img/%s", filename)
+	return &photoURL, nil
+}
 func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
@@ -100,11 +155,12 @@ func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	email := claims.(pkg.Claims).Email
 
 	var body dto.UpdateProfileRequest
-	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, dto.Response{
-			Message: "Invalid request body",
+	if err := ctx.ShouldBindWith(&body, binding.FormMultipart); err != nil {
+		log.Println("error: ", err.Error())
+		ctx.JSON(http.StatusInternalServerError, dto.Response{
+			Message: "Error",
 			Success: false,
-			Error:   "data tidak ada",
+			Error:   "Internal Server Error",
 		})
 		return
 	}
@@ -116,36 +172,28 @@ func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	if body.Phone != nil {
 		updates["phone"] = body.Phone
 	}
+
 	if body.Photo != nil {
-		updates["photo"] = body.Photo
+		photoURL, err := p.validateAndSavePhoto(ctx, body.Photo, email)
+		if err != nil {
+			return
+		}
+		updates["photo"] = photoURL
 	}
 
-	if len(updates) == 0 {
-		ctx.JSON(http.StatusBadRequest, dto.Response{
-			Message: "No fields to update",
-			Success: false,
-			Error:   "Request body is empty",
-		})
-		return
-	}
-
-	profile, err := p.profileservice.EditProfile(ctx.Request.Context(), email, updates)
+	_, err := p.profileservice.EditProfile(ctx, email, updates)
 	if err != nil {
+		log.Println("error: ", err.Error())
 		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Failed to update profile",
+			Message: "Error",
 			Success: false,
-			Error:   err.Error(),
+			Error:   "Internal Server Error",
 		})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, dto.Response{
-		Data: dto.ProfileResponse{
-			FullName: profile.FullName,
-			Phone:    profile.Phone,
-			Photo:    profile.Photo,
-		},
-		Message: "Profile successfully updated",
+		Message: "OK",
 		Success: true,
 	})
 }
