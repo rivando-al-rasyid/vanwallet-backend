@@ -20,13 +20,18 @@ type ChartPoint struct {
 	Expense int64  `json:"expense"`
 }
 
+// Transaction maps to the central ledger table.
+// Type matches the DB enum: EXPENSE, WITHDRAWAL, TRANSFER_IN, TRANSFER_OUT.
+// Amount is always positive; direction is inferred from Type.
 type Transaction struct {
-	ID        uuid.UUID         `json:"id"`
-	WalletID  uuid.UUID         `json:"wallet_id"`
-	Amount    int64             `json:"amount"`
-	Direction Direction         `json:"direction"`
-	AdminFee  int64             `json:"admin_fee"`
-	Status    TransactionStatus `json:"status"`
-	Note      *string           `json:"note,omitempty"`
-	CreatedAt time.Time         `json:"created_at"`
+	ID             uuid.UUID         `db:"id"              json:"id"`
+	WalletID       uuid.UUID         `db:"wallet_id"       json:"wallet_id"`
+	Type           TransactionType   `db:"type"            json:"type"`
+	Amount         int64             `db:"amount"          json:"amount"`
+	AdminFee       int64             `db:"admin_fee"       json:"admin_fee"`
+	Status         TransactionStatus `db:"status"          json:"status"`
+	IdempotencyKey *string           `db:"idempotency_key" json:"idempotency_key,omitempty"`
+	Note           *string           `db:"note"            json:"note,omitempty"`
+	CreatedAt      time.Time         `db:"created_at"      json:"created_at"`
+	UpdatedAt      *time.Time        `db:"updated_at"      json:"updated_at,omitempty"`
 }
