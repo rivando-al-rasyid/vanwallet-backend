@@ -16,6 +16,12 @@ func TransactionRouter(router *gin.Engine, db *pgxpool.Pool) {
 	txServ := service.NewTransactionService(txRepo)
 	txCont := controller.NewTransactionController(txServ)
 
+	// GET /transaction/summary      → balance, income, expense summary
+	transactionRouter.GET("/summary", middleware.VerifyToken, txCont.GetSummary)
+
+	// GET /transaction/report?range=7days|30days  → chart data
+	transactionRouter.GET("/report", middleware.VerifyToken, txCont.GetTransactionReport)
+
 	transactionRouter.POST("/", middleware.VerifyToken, txCont.CreateTransaction)
 	transactionRouter.GET("/", middleware.VerifyToken, txCont.GetTransactions)
 	transactionRouter.GET("/:id", middleware.VerifyToken, txCont.GetTransactionByID)

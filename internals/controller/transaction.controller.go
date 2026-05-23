@@ -20,6 +20,125 @@ func NewTransactionController(transactionService *service.TransactionService) *T
 	return &TransactionController{transactionService: transactionService}
 }
 
+// GetSummary godoc
+//
+//	@Summary		Get transaction summary
+//	@Description	Returns the authenticated user's current balance, total income, and total expense
+//	@Tags			Transaction
+//	@Produce		json
+//	@Security		ApiKeyAuth
+//	@Success		200	{object}	dto.Response{data=dto.SummaryResponse}
+//	@Failure		401	{object}	dto.Response
+//	@Failure		404	{object}	dto.Response
+//	@Failure		500	{object}	dto.Response
+//	@Router			/transaction/summary [get]
+func (t *TransactionController) GetSummary(ctx *gin.Context) {
+	claims, exists := ctx.Get("claims")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, dto.Response{
+			Message: "Unauthorized",
+			Success: false,
+			Error:   "Missing claims",
+		})
+		return
+	}
+
+	email := claims.(pkg.Claims).Email
+
+	summary, err := t.transactionService.GetSummary(ctx.Request.Context(), email)
+	if err != nil {
+		if err.Error() == "user profile not found" {
+			ctx.JSON(http.StatusNotFound, dto.Response{
+				Message: "Failed to fetch transaction summary",
+				Success: false,
+				Error:   "Data tidak ditemukan",
+			})
+			return
+		}
+
+		ctx.JSON(http.StatusInternalServerError, dto.Response{
+			Message: "Failed to fetch transaction summary",
+			Success: false,
+			Error:   "Internal server error",
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, dto.Response{
+		Data: dto.SummaryResponse{
+			CurrentBalance: summary.CurrentBalance,
+			TotalIncome:    summary.TotalIncome,
+			TotalExpense:   summary.TotalExpense,
+		},
+		Message: "Transaction summary successfully retrieved",
+		Success: true,
+	})
+}
+
+// GetTransactionReport godoc
+//
+//	@Summary		Get transaction report (graph)
+//	@Description	Returns income vs expense chart data grouped by day (7days) or by week (30days)
+//	@Tags			Transaction
+//	@Produce		json
+//	@Security		ApiKeyAuth
+//	@Param			range	query		string	false	"Time range: 7days (default) or 30days"	Enums(7days, 30days)
+//	@Success		200		{object}	dto.Response{data=dto.TransactionReportResponse}
+//	@Failure		401		{object}	dto.Response
+//	@Failure		500		{object}	dto.Response
+//	@Router			/transaction/report [get]
+func (t *TransactionController) GetTransactionReport(ctx *gin.Context) {
+	claims, exists := ctx.Get("claims")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, dto.Response{
+			Message: "Unauthorized",
+			Success: false,
+			Error:   "Missing claims",
+		})
+		return
+	}
+
+	email := claims.(pkg.Claims).Email
+
+	rangeParam := ctx.DefaultQuery("range", "7days")
+	if rangeParam != "7days" && rangeParam != "30days" {
+		ctx.JSON(http.StatusBadRequest, dto.Response{
+			Message: "Invalid range parameter",
+			Success: false,
+			Error:   "range must be '7days' or '30days'",
+		})
+		return
+	}
+
+	points, err := t.transactionService.GetTransactionReport(ctx.Request.Context(), email, rangeParam)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, dto.Response{
+			Message: "Failed to fetch transaction report",
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	resp := make([]dto.ChartPointResponse, 0, len(points))
+	for _, p := range points {
+		resp = append(resp, dto.ChartPointResponse{
+			Label:   p.Label,
+			Income:  p.Income,
+			Expense: p.Expense,
+		})
+	}
+
+	ctx.JSON(http.StatusOK, dto.Response{
+		Data: dto.TransactionReportResponse{
+			Range:  rangeParam,
+			Points: resp,
+		},
+		Message: "Transaction report successfully retrieved",
+		Success: true,
+	})
+}
+
 // CreateTransaction godoc
 //
 //	@Summary		Create a transaction

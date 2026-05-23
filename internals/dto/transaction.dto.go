@@ -1,5 +1,25 @@
 package dto
 
+// SummaryResponse returns the user's financial overview.
+type SummaryResponse struct {
+	CurrentBalance int64 `json:"current_balance"`
+	TotalIncome    int64 `json:"total_income"`
+	TotalExpense   int64 `json:"total_expense"`
+}
+
+// ChartPointResponse is a single bar in the financial chart.
+type ChartPointResponse struct {
+	Label   string `json:"label"`
+	Income  int64  `json:"income"`
+	Expense int64  `json:"expense"`
+}
+
+// TransactionReportResponse wraps the full chart dataset.
+type TransactionReportResponse struct {
+	Range  string               `json:"range"`  // "7days" | "30days"
+	Points []ChartPointResponse `json:"points"`
+}
+
 // TransactionResponse is the public representation of a single transaction ledger entry.
 type TransactionResponse struct {
 	ID        string `json:"id"`

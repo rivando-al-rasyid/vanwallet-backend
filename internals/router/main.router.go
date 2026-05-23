@@ -15,6 +15,5 @@ func MainRouter(router *gin.Engine, db *pgxpool.Pool) {
 	router.Use(middleware.CORSMiddleware)
 	AuthRouter(router, db)
 	ProfileRouter(router, db)
-	DashboardRouter(router, db)
 	TransactionRouter(router, db)
 }

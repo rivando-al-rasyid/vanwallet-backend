@@ -8,6 +8,8 @@ import (
 )
 
 type TransactionRepository interface {
+	GetSummary(ctx context.Context, email string) (model.TransactionSummary, error)
+	GetTransactionReport(ctx context.Context, email string, rangeParam string) ([]model.ChartPoint, error)
 	CreateTransaction(ctx context.Context, tx model.Transaction) (model.Transaction, error)
 	GetTransactionsByWallet(ctx context.Context, email string, walletID uuid.UUID, page, limit int) ([]model.Transaction, int, error)
 	GetAllTransactions(ctx context.Context, email string, page, limit int) ([]model.Transaction, int, error)
@@ -20,6 +22,14 @@ type TransactionService struct {
 
 func NewTransactionService(repo TransactionRepository) *TransactionService {
 	return &TransactionService{repo: repo}
+}
+
+func (s *TransactionService) GetSummary(ctx context.Context, email string) (model.TransactionSummary, error) {
+	return s.repo.GetSummary(ctx, email)
+}
+
+func (s *TransactionService) GetTransactionReport(ctx context.Context, email string, rangeParam string) ([]model.ChartPoint, error) {
+	return s.repo.GetTransactionReport(ctx, email, rangeParam)
 }
 
 func (s *TransactionService) CreateTransaction(ctx context.Context, tx model.Transaction) (model.Transaction, error) {
