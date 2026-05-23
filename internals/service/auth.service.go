@@ -9,7 +9,7 @@ import (
 )
 
 type AuthRepo interface {
-	Register(ctx context.Context, email, password string) (model.User, error)
+	Register(ctx context.Context, email, username, password string) (model.User, error)
 	Login(ctx context.Context, email string) (model.User, error)
 	ClearToken(ctx context.Context, userID string) error
 	GetUserPin(ctx context.Context, email string) (model.UserPin, error)
@@ -28,14 +28,15 @@ func (a *AuthService) Register(ctx context.Context, user dto.RegisterRequest) (d
 	hc.UseRecommended()
 	hashedPwd := hc.GenHash(user.Password)
 
-	registerResult, err := a.authRepo.Register(ctx, user.Email, hashedPwd)
+	result, err := a.authRepo.Register(ctx, user.Email, user.Username, hashedPwd)
 	if err != nil {
 		return dto.UserResponse{}, err
 	}
 
 	return dto.UserResponse{
-		ID:    registerResult.ID,
-		Email: registerResult.Email,
+		ID:       result.ID,
+		Email:    result.Email,
+		Username: result.Username,
 	}, nil
 }
 

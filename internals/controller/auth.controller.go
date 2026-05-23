@@ -69,7 +69,7 @@ func (a *AuthController) Register(ctx *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Param			body	body		dto.LoginRequest	true	"Login payload"
-//	@Success		200		{object}	dto.Response{data=dto.LoginResponse}
+//	@Success		200		{object}	dto.Response{data=dto.UserResponse}
 //	@Failure		400		{object}	dto.Response
 //	@Failure		401		{object}	dto.Response
 //	@Router			/auth/login [post]
@@ -107,14 +107,14 @@ func (a *AuthController) Login(ctx *gin.Context) {
 // GetPIN godoc
 //
 //	@Summary		Get user PIN hash
-//	@Description	Retrieve the hashed PIN of the authenticated user
+//	@Description	Retrieve the hashed PIN of the authenticated user. Returns the stored bcrypt hash (not the plain PIN).
 //	@Tags			Auth
 //	@Produce		json
-//	@Security		ApiKeyAuth
-//	@Success		200	{object}	dto.Response{data=string}
-//	@Failure		401	{object}	dto.Response
-//	@Failure		404	{object}	dto.Response
-//	@Failure		500	{object}	dto.Response
+//	@Security       ApiKeyAuth
+//	@Success		200				{object}	dto.Response{data=string}	"PIN hash retrieved"
+//	@Failure		401				{object}	dto.Response	"Unauthorized or missing token"
+//	@Failure		404				{object}	dto.Response	"PIN not set for this user"
+//	@Failure		500				{object}	dto.Response	"Internal server error"
 //	@Router			/auth/pin [get]
 func (a *AuthController) GetPIN(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
