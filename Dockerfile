@@ -1,4 +1,3 @@
-# check=skip=SecretsUsedInArgOrEnv
 FROM postgres:18.4-alpine3.23
 
 ENV POSTGRES_USER=vando

@@ -88,7 +88,7 @@ func (t *TransactionRepo) GetTransactionReport(ctx context.Context, email string
 		GROUP BY DATE_TRUNC('week', created_at)
 		ORDER BY DATE_TRUNC('week', created_at);`
 
-	default: // "7days"
+	default:
 		sql = `
 		WITH UserWallets AS (
 			SELECT w.id
