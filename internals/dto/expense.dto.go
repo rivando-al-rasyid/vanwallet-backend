@@ -1,17 +1,24 @@
 package dto
 
-// ExpenseResponse is the public representation of an expense record.
-type ExpenseResponse struct {
-	TransactionID string `json:"transaction_id"`
-	Amount        int64  `json:"amount"`
-	Category      string `json:"category,omitempty"`
-	MerchantName  string `json:"merchant_name,omitempty"`
-	Note          string `json:"note,omitempty"`
-	CreatedAt     string `json:"created_at"`
+// ExpenseRequest is the payload for recording an expense.
+type ExpenseRequest struct {
+	WalletID     string  `json:"wallet_id"     validate:"required,uuid4"`
+	Amount       int64   `json:"amount"        validate:"required,gt=0"`
+	AdminFee     int64   `json:"admin_fee"     validate:"omitempty,gte=0"`
+	Category     string  `json:"category"      validate:"omitempty,max=50"`
+	MerchantName string  `json:"merchant_name" validate:"omitempty,max=100"`
+	Note         *string `json:"note"          validate:"omitempty,max=255"`
+	Pin          string  `json:"pin"           validate:"required,len=6,numeric"`
 }
 
-// UpdateExpenseRequest allows enriching category and merchant name after the fact.
-type UpdateExpenseRequest struct {
-	Category     *string `json:"category"      validate:"omitempty,max=100"`
-	MerchantName *string `json:"merchant_name" validate:"omitempty,max=100"`
+// ExpenseResponse is returned after an expense is recorded.
+type ExpenseResponse struct {
+	TransactionID string `json:"transaction_id"`
+	WalletID      string `json:"wallet_id"`
+	Amount        int64  `json:"amount"`
+	AdminFee      int64  `json:"admin_fee"`
+	Category      string `json:"category,omitempty"`
+	MerchantName  string `json:"merchant_name,omitempty"`
+	Status        string `json:"status"`
+	CreatedAt     string `json:"created_at"`
 }
