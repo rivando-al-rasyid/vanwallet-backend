@@ -33,11 +33,11 @@ func NewProfileController(profileservice *service.ProfileService) *ProfileContro
 //	@Description	Retrieve the profile information of the authenticated user
 //	@Tags			Profile
 //	@Produce		json
-//	@Security		ApiKeyAuth
-//	@Success		200	{object}	dto.Response{data=dto.ProfileResponse}
-//	@Failure		401	{object}	dto.Response
-//	@Failure		404	{object}	dto.Response
-//	@Failure		500	{object}	dto.Response
+//	@Security       ApiKeyAuth
+//	@Success		200				{object}	dto.Response{data=dto.ProfileResponse}
+//	@Failure		401				{object}	dto.Response
+//	@Failure		404				{object}	dto.Response
+//	@Failure		500				{object}	dto.Response
 //	@Router			/profile/ [get]
 func (p *ProfileController) GetProfile(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
@@ -83,22 +83,6 @@ func (p *ProfileController) GetProfile(ctx *gin.Context) {
 	})
 }
 
-// EditProfile godoc
-//
-//	@Summary		Update user profile
-//	@Description	Update one or more profile fields (full_name, phone, photo) of the authenticated user
-//	@Tags			Profile
-//	@Accept			mpfd
-//	@Produce		json
-//	@Security		ApiKeyAuth
-//	@Param			full_name	formData	string	false	"Full name"
-//	@Param			phone		formData	string	false	"Phone number (E.164)"
-//	@Param			photo		formData	file	false	"Profile photo (jpg/png/webp, max 2MB)"
-//	@Success		200			{object}	dto.Response{data=dto.ProfileResponse}
-//	@Failure		400			{object}	dto.Response
-//	@Failure		401			{object}	dto.Response
-//	@Failure		500			{object}	dto.Response
-//	@Router			/profile/ [post]
 func (p *ProfileController) validateAndSavePhoto(ctx *gin.Context, photo *multipart.FileHeader, email string) (*string, error) {
 	if e := p.profileservice.ValidateUpload(2*config.MB, photo); e != nil {
 		log.Println(e.Error())
@@ -142,6 +126,24 @@ func (p *ProfileController) validateAndSavePhoto(ctx *gin.Context, photo *multip
 	photoURL := fmt.Sprintf("/img/%s", filename)
 	return &photoURL, nil
 }
+
+// EditProfile godoc
+//
+//	@Summary		Update user profile
+//	@Description	Update one or more profile fields (full_name, phone, photo) of the authenticated user. All fields are optional.
+//	@Tags			Profile
+//	@Accept			multipart/form-data
+//	@Produce		json
+//	@Security       ApiKeyAuth
+//	@Param			full_name		formData	string	false	"Full name"
+//	@Param			phone			formData	string	false	"Phone number (E.164 format)"
+//	@Param			photo			formData	file	false	"Profile photo (jpg/jpeg/png/webp, max 2MB)"
+//	@Success		200				{object}	dto.Response	"Profile updated successfully (no data returned)"
+//	@Failure		400				{object}	dto.Response	"Invalid form data"
+//	@Failure		401				{object}	dto.Response	"Unauthorized"
+//	@Failure		422				{object}	dto.Response	"File too large or invalid file type"
+//	@Failure		500				{object}	dto.Response	"Internal server error"
+//	@Router			/profile/ [post]
 func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
@@ -201,16 +203,16 @@ func (p *ProfileController) EditProfile(ctx *gin.Context) {
 // EditPin godoc
 //
 //	@Summary		Update user PIN
-//	@Description	Update the PIN of the authenticated user
+//	@Description	Set or change the 6‑digit PIN for the authenticated user. The PIN must be hashed before sending.
 //	@Tags			Profile
 //	@Accept			json
 //	@Produce		json
-//	@Security		ApiKeyAuth
-//	@Param			body	body		dto.SetPinRequest	true	"PIN update payload"
-//	@Success		200		{object}	dto.Response
-//	@Failure		400		{object}	dto.Response
-//	@Failure		401		{object}	dto.Response
-//	@Failure		500		{object}	dto.Response
+//	@Security       ApiKeyAuth
+//	@Param			body			body		dto.SetPinRequest	true	"PIN update payload (pin_hash is bcrypt hash)"
+//	@Success		200				{object}	dto.Response	"PIN updated successfully"
+//	@Failure		400				{object}	dto.Response	"Invalid request body"
+//	@Failure		401				{object}	dto.Response	"Unauthorized"
+//	@Failure		500				{object}	dto.Response	"Internal server error"
 //	@Router			/profile/pin [post]
 func (p *ProfileController) EditPin(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
@@ -250,6 +252,20 @@ func (p *ProfileController) EditPin(ctx *gin.Context) {
 	})
 }
 
+// EditPassword godoc
+//
+//	@Summary		Update user password
+//	@Description	Change the password of the authenticated user after verifying the old password.
+//	@Tags			Profile
+//	@Accept			json
+//	@Produce		json
+//	@Security       ApiKeyAuth
+//	@Param			body			body		dto.ChangePasswordRequest	true	"Password update payload"
+//	@Success		200				{object}	dto.Response	"Password updated successfully"
+//	@Failure		400				{object}	dto.Response	"Invalid request body"
+//	@Failure		401				{object}	dto.Response	"Unauthorized or old password is incorrect"
+//	@Failure		500				{object}	dto.Response	"Internal server error"
+//	@Router			/profile/password [post]
 func (p *ProfileController) EditPassword(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
@@ -272,8 +288,16 @@ func (p *ProfileController) EditPassword(ctx *gin.Context) {
 		return
 	}
 
-	_, err := p.profileservice.EditPassword(ctx.Request.Context(), email, body.Password)
+	_, err := p.profileservice.EditPassword(ctx.Request.Context(), email, body.OldPassword, body.Password)
 	if err != nil {
+		if err.Error() == "old password is incorrect" {
+			ctx.JSON(http.StatusUnauthorized, dto.Response{
+				Message: "Failed to update password",
+				Success: false,
+				Error:   "Old password is incorrect",
+			})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, dto.Response{
 			Message: "Failed to update Password",
 			Success: false,
