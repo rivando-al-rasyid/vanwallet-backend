@@ -29,55 +29,36 @@ func NewProfileController(profileservice *service.ProfileService) *ProfileContro
 
 // GetProfile godoc
 //
-//	@Summary		Get user profile
-//	@Description	Retrieve the profile information of the authenticated user
+//	@Summary		Get profile
+//	@Description	Retrieve the authenticated user's profile: full_name, phone, and photo URL.
 //	@Tags			Profile
 //	@Produce		json
-//	@Security       ApiKeyAuth
-//	@Success		200				{object}	dto.Response{data=dto.ProfileResponse}
-//	@Failure		401				{object}	dto.Response
-//	@Failure		404				{object}	dto.Response
-//	@Failure		500				{object}	dto.Response
+//	@Security		ApiKeyAuth
+//	@Success		200	{object}	dto.Response{data=dto.ProfileResponse}	"Profile data"
+//	@Failure		401	{object}	dto.Response							"Unauthorized"
+//	@Failure		404	{object}	dto.Response							"Profile not found"
+//	@Failure		500	{object}	dto.Response
 //	@Router			/profile/ [get]
 func (p *ProfileController) GetProfile(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
-		ctx.JSON(http.StatusUnauthorized, dto.Response{
-			Message: "Unauthorized",
-			Success: false,
-			Error:   "Missing claims",
-		})
+		ctx.JSON(http.StatusUnauthorized, dto.Response{Message: "Unauthorized", Success: false, Error: "Missing claims"})
 		return
 	}
 
 	email := claims.(pkg.Claims).Email
-
 	profile, err := p.profileservice.GetProfile(ctx.Request.Context(), email)
 	if err != nil {
 		if err.Error() == "user profile not found" {
-			ctx.JSON(http.StatusNotFound, dto.Response{
-				Message: "Failed to fetch profile",
-				Success: false,
-				Error:   "Data tidak ditemukan",
-			})
+			ctx.JSON(http.StatusNotFound, dto.Response{Message: "Failed to fetch profile", Success: false, Error: "Data tidak ditemukan"})
 			return
 		}
-
-		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Failed to fetch profile",
-			Success: false,
-			Error:   "Internal server error",
-		})
+		ctx.JSON(http.StatusInternalServerError, dto.Response{Message: "Failed to fetch profile", Success: false, Error: "Internal server error"})
 		return
 	}
 
-	res := dto.ProfileResponse{
-		FullName: profile.FullName,
-		Phone:    profile.Phone,
-		Photo:    profile.Photo,
-	}
 	ctx.JSON(http.StatusOK, dto.Response{
-		Data:    res,
+		Data:    dto.ProfileResponse{FullName: profile.FullName, Phone: profile.Phone, Photo: profile.Photo},
 		Message: "Profile successfully retrieved",
 		Success: true,
 	})
@@ -87,26 +68,14 @@ func (p *ProfileController) validateAndSavePhoto(ctx *gin.Context, photo *multip
 	if e := p.profileservice.ValidateUpload(2*config.MB, photo); e != nil {
 		log.Println(e.Error())
 		if errors.Is(e, config.ErrFileTooLarge) {
-			ctx.JSON(http.StatusUnprocessableEntity, dto.Response{
-				Message: "File too large",
-				Success: false,
-				Error:   "Photo must be under 2MB",
-			})
+			ctx.JSON(http.StatusUnprocessableEntity, dto.Response{Message: "File too large", Success: false, Error: "Photo must be under 2MB"})
 			return nil, e
 		}
 		if errors.Is(e, config.ErrExtNotAllowed) {
-			ctx.JSON(http.StatusUnprocessableEntity, dto.Response{
-				Message: "Invalid file type",
-				Success: false,
-				Error:   "Only .jpg, .jpeg, .png, .webp are allowed",
-			})
+			ctx.JSON(http.StatusUnprocessableEntity, dto.Response{Message: "Invalid file type", Success: false, Error: "Only .jpg, .jpeg, .png, .webp are allowed"})
 			return nil, e
 		}
-		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Error",
-			Success: false,
-			Error:   "Internal Server Error",
-		})
+		ctx.JSON(http.StatusInternalServerError, dto.Response{Message: "Error", Success: false, Error: "Internal Server Error"})
 		return nil, e
 	}
 
@@ -115,11 +84,7 @@ func (p *ProfileController) validateAndSavePhoto(ctx *gin.Context, photo *multip
 	dst := filepath.Join("public", "img", filename)
 	if err := ctx.SaveUploadedFile(photo, dst); err != nil {
 		log.Println("error: ", err.Error())
-		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Error",
-			Success: false,
-			Error:   "Internal Server Error",
-		})
+		ctx.JSON(http.StatusInternalServerError, dto.Response{Message: "Error", Success: false, Error: "Internal Server Error"})
 		return nil, err
 	}
 
@@ -129,29 +94,25 @@ func (p *ProfileController) validateAndSavePhoto(ctx *gin.Context, photo *multip
 
 // EditProfile godoc
 //
-//	@Summary		Update user profile
-//	@Description	Update one or more profile fields (full_name, phone, photo) of the authenticated user. All fields are optional.
+//	@Summary		Update profile
+//	@Description	Update one or more profile fields: full_name, phone, and/or photo. All fields are optional. Omit any field to leave it unchanged.
 //	@Tags			Profile
-//	@Accept			multipart/form-data
+//	@Accept			mpfd
 //	@Produce		json
-//	@Security       ApiKeyAuth
-//	@Param			full_name		formData	string	false	"Full name"
-//	@Param			phone			formData	string	false	"Phone number (E.164 format)"
-//	@Param			photo			formData	file	false	"Profile photo (jpg/jpeg/png/webp, max 2MB)"
-//	@Success		200				{object}	dto.Response	"Profile updated successfully (no data returned)"
-//	@Failure		400				{object}	dto.Response	"Invalid form data"
-//	@Failure		401				{object}	dto.Response	"Unauthorized"
-//	@Failure		422				{object}	dto.Response	"File too large or invalid file type"
-//	@Failure		500				{object}	dto.Response	"Internal server error"
+//	@Security		ApiKeyAuth
+//	@Param			full_name	formData	string	false	"Display name"
+//	@Param			phone		formData	string	false	"Phone number in E.164 format (e.g. +628123456789)"
+//	@Param			photo		formData	file	false	"Profile photo — JPEG, PNG, or WebP, max 2 MB"
+//	@Success		200			{object}	dto.Response							"Profile updated"
+//	@Failure		400			{object}	dto.Response							"Invalid form data"
+//	@Failure		401			{object}	dto.Response							"Unauthorized"
+//	@Failure		422			{object}	dto.Response							"File too large or unsupported type"
+//	@Failure		500			{object}	dto.Response
 //	@Router			/profile/ [post]
 func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
-		ctx.JSON(http.StatusUnauthorized, dto.Response{
-			Message: "Unauthorized",
-			Success: false,
-			Error:   "Missing claims",
-		})
+		ctx.JSON(http.StatusUnauthorized, dto.Response{Message: "Unauthorized", Success: false, Error: "Missing claims"})
 		return
 	}
 	email := claims.(pkg.Claims).Email
@@ -159,11 +120,7 @@ func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	var body dto.UpdateProfileRequest
 	if err := ctx.ShouldBindWith(&body, binding.FormMultipart); err != nil {
 		log.Println("error: ", err.Error())
-		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Error",
-			Success: false,
-			Error:   "Internal Server Error",
-		})
+		ctx.JSON(http.StatusInternalServerError, dto.Response{Message: "Error", Success: false, Error: "Internal Server Error"})
 		return
 	}
 
@@ -174,7 +131,6 @@ func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	if body.Phone != nil {
 		updates["phone"] = body.Phone
 	}
-
 	if body.Photo != nil {
 		photoURL, err := p.validateAndSavePhoto(ctx, body.Photo, email)
 		if err != nil {
@@ -186,128 +142,87 @@ func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	_, err := p.profileservice.EditProfile(ctx, email, updates)
 	if err != nil {
 		log.Println("error: ", err.Error())
-		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Error",
-			Success: false,
-			Error:   "Internal Server Error",
-		})
+		ctx.JSON(http.StatusInternalServerError, dto.Response{Message: "Error", Success: false, Error: "Internal Server Error"})
 		return
 	}
 
-	ctx.JSON(http.StatusOK, dto.Response{
-		Message: "OK",
-		Success: true,
-	})
+	ctx.JSON(http.StatusOK, dto.Response{Message: "Profile successfully updated", Success: true})
 }
 
 // EditPin godoc
 //
-//	@Summary		Update user PIN
-//	@Description	Set or change the 6‑digit PIN for the authenticated user. The PIN must be hashed before sending.
+//	@Summary		Set / update PIN
+//	@Description	Store a new bcrypt-hashed 6-digit PIN for the authenticated user. The client must hash the raw PIN with bcrypt before sending. Any existing PIN is replaced.
 //	@Tags			Profile
 //	@Accept			json
 //	@Produce		json
-//	@Security       ApiKeyAuth
-//	@Param			body			body		dto.SetPinRequest	true	"PIN update payload (pin_hash is bcrypt hash)"
-//	@Success		200				{object}	dto.Response	"PIN updated successfully"
-//	@Failure		400				{object}	dto.Response	"Invalid request body"
-//	@Failure		401				{object}	dto.Response	"Unauthorized"
-//	@Failure		500				{object}	dto.Response	"Internal server error"
-//	@Router			/profile/pin [post]
+//	@Security		ApiKeyAuth
+//	@Param			body	body		dto.SetPinRequest	true	"PIN payload (pin_hash = bcrypt hash of the 6-digit PIN)"
+//	@Success		200		{object}	dto.Response		"PIN updated"
+//	@Failure		400		{object}	dto.Response		"Invalid or missing payload"
+//	@Failure		401		{object}	dto.Response		"Unauthorized"
+//	@Failure		500		{object}	dto.Response
+//	@Router			/profile/change/pin [post]
 func (p *ProfileController) EditPin(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
-		ctx.JSON(http.StatusUnauthorized, dto.Response{
-			Message: "Unauthorized",
-			Success: false,
-			Error:   "Missing claims",
-		})
+		ctx.JSON(http.StatusUnauthorized, dto.Response{Message: "Unauthorized", Success: false, Error: "Missing claims"})
 		return
 	}
 	email := claims.(pkg.Claims).Email
 
 	var body dto.SetPinRequest
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, dto.Response{
-			Message: "Invalid request body",
-			Success: false,
-			Error:   "data tidak ada",
-		})
+		ctx.JSON(http.StatusBadRequest, dto.Response{Message: "Invalid request body", Success: false, Error: "data tidak ada"})
 		return
 	}
 
 	_, err := p.profileservice.EditPin(ctx.Request.Context(), email, *body.PinHash)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Failed to update Pin",
-			Success: false,
-			Error:   err.Error(),
-		})
+		ctx.JSON(http.StatusInternalServerError, dto.Response{Message: "Failed to update Pin", Success: false, Error: err.Error()})
 		return
 	}
 
-	ctx.JSON(http.StatusOK, dto.Response{
-		Message: "Profile successfully updated",
-		Success: true,
-	})
+	ctx.JSON(http.StatusOK, dto.Response{Message: "PIN successfully updated", Success: true})
 }
 
 // EditPassword godoc
 //
-//	@Summary		Update user password
-//	@Description	Change the password of the authenticated user after verifying the old password.
+//	@Summary		Change password
+//	@Description	Verify the current password, then replace it with the new one. Both fields are required.
 //	@Tags			Profile
 //	@Accept			json
 //	@Produce		json
-//	@Security       ApiKeyAuth
-//	@Param			body			body		dto.ChangePasswordRequest	true	"Password update payload"
-//	@Success		200				{object}	dto.Response	"Password updated successfully"
-//	@Failure		400				{object}	dto.Response	"Invalid request body"
-//	@Failure		401				{object}	dto.Response	"Unauthorized or old password is incorrect"
-//	@Failure		500				{object}	dto.Response	"Internal server error"
-//	@Router			/profile/password [post]
+//	@Security		ApiKeyAuth
+//	@Param			body	body		dto.ChangePasswordRequest	true	"Password change payload"
+//	@Success		200		{object}	dto.Response				"Password updated"
+//	@Failure		400		{object}	dto.Response				"Invalid or missing payload"
+//	@Failure		401		{object}	dto.Response				"Unauthorized or wrong old password"
+//	@Failure		500		{object}	dto.Response
+//	@Router			/profile/change/password [post]
 func (p *ProfileController) EditPassword(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
-		ctx.JSON(http.StatusUnauthorized, dto.Response{
-			Message: "Unauthorized",
-			Success: false,
-			Error:   "Missing claims",
-		})
+		ctx.JSON(http.StatusUnauthorized, dto.Response{Message: "Unauthorized", Success: false, Error: "Missing claims"})
 		return
 	}
 	email := claims.(pkg.Claims).Email
 
 	var body dto.ChangePasswordRequest
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, dto.Response{
-			Message: "Invalid request body",
-			Success: false,
-			Error:   "data tidak ada",
-		})
+		ctx.JSON(http.StatusBadRequest, dto.Response{Message: "Invalid request body", Success: false, Error: "data tidak ada"})
 		return
 	}
 
 	_, err := p.profileservice.EditPassword(ctx.Request.Context(), email, body.OldPassword, body.Password)
 	if err != nil {
 		if err.Error() == "old password is incorrect" {
-			ctx.JSON(http.StatusUnauthorized, dto.Response{
-				Message: "Failed to update password",
-				Success: false,
-				Error:   "Old password is incorrect",
-			})
+			ctx.JSON(http.StatusUnauthorized, dto.Response{Message: "Failed to update password", Success: false, Error: "Old password is incorrect"})
 			return
 		}
-		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Failed to update Password",
-			Success: false,
-			Error:   err.Error(),
-		})
+		ctx.JSON(http.StatusInternalServerError, dto.Response{Message: "Failed to update Password", Success: false, Error: err.Error()})
 		return
 	}
 
-	ctx.JSON(http.StatusOK, dto.Response{
-		Message: "Password successfully updated",
-		Success: true,
-	})
+	ctx.JSON(http.StatusOK, dto.Response{Message: "Password successfully updated", Success: true})
 }

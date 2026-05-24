@@ -2,10 +2,10 @@ package dto
 
 import "github.com/google/uuid"
 
-// RegisterRequest is the payload for creating a new account.
+// RegisterRequest — only email and password required.
+// No username field; username concept has been removed entirely.
 type RegisterRequest struct {
 	Email    string `json:"email"    validate:"required,email"`
-	Username string `json:"username" validate:"required,min=3,max=30,alphanum"`
 	Password string `json:"password" validate:"required,min=8"`
 }
 
@@ -15,9 +15,8 @@ type LoginRequest struct {
 	Password string `json:"password" validate:"required"`
 }
 
-// UserResponse is the public representation of a user.
+// UserResponse is the public representation after register/login.
 type UserResponse struct {
-	ID       uuid.UUID `json:"id"`
-	Email    string    `json:"email"`
-	Username string    `json:"username"`
+	ID    uuid.UUID `json:"id"`
+	Email string    `json:"email"`
 }

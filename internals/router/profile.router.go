@@ -10,15 +10,14 @@ import (
 )
 
 func ProfileRouter(router *gin.Engine, db *pgxpool.Pool) {
-	profileRouter := router.Group("/profile")
-
 	profRepo := repository.NewProfileRepo(db)
 	profServ := service.NewProfileService(profRepo)
 	profCont := controller.NewProfileController(profServ)
 
-	profileRouter.GET("/", middleware.VerifyToken, profCont.GetProfile)
-	profileRouter.POST("/", middleware.VerifyToken, profCont.EditProfile)
-	profileRouter.POST("/change/pin", middleware.VerifyToken, profCont.EditPin)
-	profileRouter.POST("/change/password", middleware.VerifyToken, profCont.EditPassword)
+	profileRouter := router.Group("/profile", middleware.VerifyTokenWithDB(db))
 
+	profileRouter.GET("/", profCont.GetProfile)
+	profileRouter.POST("/", profCont.EditProfile)
+	profileRouter.POST("/change/pin", profCont.EditPin)
+	profileRouter.POST("/change/password", profCont.EditPassword)
 }
