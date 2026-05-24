@@ -25,6 +25,8 @@ func (a *Authrepo) Register(ctx context.Context, email, hashpwd string) (model.U
 	if err != nil {
 		return model.User{}, fmt.Errorf("Register begin tx: %w", err)
 	}
+	// Defer rollback to ensure it runs if an error occurs or the function exits early.
+	// After a successful Commit, Rollback is a no-op.
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	var user model.User
@@ -37,25 +39,23 @@ func (a *Authrepo) Register(ctx context.Context, email, hashpwd string) (model.U
 		return model.User{}, fmt.Errorf("Register insert user: %w", err)
 	}
 
-	if _, err = tx.Exec(ctx,
-		`INSERT INTO profiles (user_id) VALUES ($1)`, user.ID,
-	); err != nil {
+	_, err = tx.Exec(ctx, `INSERT INTO profiles (user_id) VALUES ($1)`, user.ID)
+	if err != nil {
 		return model.User{}, fmt.Errorf("Register insert profile: %w", err)
 	}
 
-	if _, err = tx.Exec(ctx,
-		`INSERT INTO user_pins (user_id, pin_hash) VALUES ($1, '')`, user.ID,
-	); err != nil {
+	_, err = tx.Exec(ctx, `INSERT INTO user_pins (user_id, pin_hash) VALUES ($1, '')`, user.ID)
+	if err != nil {
 		return model.User{}, fmt.Errorf("Register insert user_pin: %w", err)
 	}
 
-	if _, err = tx.Exec(ctx,
-		`INSERT INTO wallets (user_id) VALUES ($1)`, user.ID,
-	); err != nil {
+	_, err = tx.Exec(ctx, `INSERT INTO wallets (user_id) VALUES ($1)`, user.ID)
+	if err != nil {
 		return model.User{}, fmt.Errorf("Register insert wallet: %w", err)
 	}
 
-	if err = tx.Commit(ctx); err != nil {
+	err = tx.Commit(ctx)
+	if err != nil {
 		return model.User{}, fmt.Errorf("Register commit: %w", err)
 	}
 	return user, nil

@@ -10,17 +10,29 @@ import (
 )
 
 func TransactionRouter(router *gin.Engine, db *pgxpool.Pool) {
-	transactionRouter := router.Group("/transaction")
-
 	txRepo := repository.NewTransactionRepo(db)
 	txServ := service.NewTransactionService(txRepo)
-	txCont := controller.NewTransactionController(txServ)
 
-	transactionRouter.GET("/summary", middleware.VerifyToken, txCont.GetSummary)
+	authRepo := repository.NewAuthRepo(db)
+	authServ := service.NewAuthService(authRepo)
 
-	transactionRouter.GET("/report", middleware.VerifyToken, txCont.GetTransactionReport)
+	txCont := controller.NewTransactionController(txServ, authServ)
 
-	transactionRouter.POST("/", middleware.VerifyToken, txCont.CreateTransaction)
-	transactionRouter.GET("/", middleware.VerifyToken, txCont.GetTransactions)
-	transactionRouter.GET("/:id", middleware.VerifyToken, txCont.GetTransactionByID)
+	g := router.Group("/transaction", middleware.VerifyTokenWithDB(db))
+
+	// Receiver search — used before initiating a transfer
+	g.GET("/receiver", txCont.FindReceivers)
+
+	// Read
+	g.GET("/summary", txCont.GetSummary)
+	g.GET("/report", txCont.GetTransactionReport)
+	g.GET("/", txCont.GetTransactions)
+	g.GET("/:id", txCont.GetTransactionByID)
+
+	// Write
+	g.POST("/topup", txCont.CreateTopup)
+	g.PATCH("/topup/:id/confirm", txCont.ConfirmTopup)
+	g.POST("/withdrawal", txCont.CreateWithdrawal)
+	g.POST("/transfer", txCont.CreateTransfer)
+	g.POST("/expense", txCont.CreateExpense)
 }

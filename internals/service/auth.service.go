@@ -40,12 +40,17 @@ func (a *AuthService) Register(ctx context.Context, user dto.RegisterRequest) (d
 
 // Login authenticates the user and persists the issued JWT in the tokens table.
 func (a *AuthService) Login(ctx context.Context, user dto.LoginRequest) (string, error) {
+	var hc pkg.HashConfig
+	hc.UseRecommended()
+
 	login, err := a.authRepo.Login(ctx, user.Email)
 	if err != nil {
 		return "", err
 	}
 
-	var hc pkg.HashConfig
+	// Compare the plain-text password against the stored hash.
+	// GenHash must NOT be called here — hashing again produces a different hash
+	// and Compare will always fail.
 	if err := hc.Compare(user.Password, login.Password); err != nil {
 		return "", err
 	}
