@@ -1,3 +1,1 @@
--- Drop an existing database 'users'
-DROP TABLE users;
-
+DROP TABLE IF EXISTS "users";

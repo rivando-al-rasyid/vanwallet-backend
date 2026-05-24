@@ -1,0 +1,3 @@
+-- DEPRECATED: token_blacklist table was superseded by the `tokens` table (migration 000015).
+-- Token revocation is now handled via the `is_revoked` column on the `tokens` table.
+-- This migration is intentionally left as a no-op to preserve migration sequence integrity.

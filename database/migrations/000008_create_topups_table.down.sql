@@ -1,3 +1,1 @@
--- Drop an existing database 'topups'
-DROP TABLE topups;
-
+DROP TABLE IF EXISTS "topups";

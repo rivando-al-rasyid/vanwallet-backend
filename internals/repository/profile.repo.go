@@ -146,3 +146,26 @@ func (p *ProfileRepo) EditPassword(ctx context.Context, email string, newPasswor
 	}
 	return user, nil
 }
+
+// GetUserInfo returns profile + total wallet balance in a single query.
+// Used for the app header (avatar, name, balance).
+func (p *ProfileRepo) GetUserInfo(ctx context.Context, email string) (model.Profile, int64, error) {
+	var profile model.Profile
+	var balance int64
+	err := p.db.QueryRow(ctx, `
+		SELECT
+			p.full_name,
+			p.phone,
+			p.photo,
+			COALESCE(SUM(w.balance), 0) AS current_balance
+		FROM profiles p
+		JOIN users u ON p.user_id = u.id
+		LEFT JOIN wallets w ON w.user_id = u.id
+		WHERE u.email = $1
+		GROUP BY p.full_name, p.phone, p.photo`, email,
+	).Scan(&profile.FullName, &profile.Phone, &profile.Photo, &balance)
+	if err != nil {
+		return model.Profile{}, 0, err
+	}
+	return profile, balance, nil
+}

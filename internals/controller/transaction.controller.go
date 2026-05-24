@@ -78,13 +78,13 @@ func txToResponse(tx model.Transaction) dto.TransactionResponse {
 
 // GetSummary godoc
 //
-//	@Summary		Get financial summary
-//	@Description	Returns the authenticated user's total wallet balance, total income (TRANSFER_IN), and total expense (EXPENSE + WITHDRAWAL + TRANSFER_OUT)
+//	@Summary		Dashboard — financial summary
+//	@Description	Returns the authenticated user's total wallet balance, total income (TRANSFER_IN), total expense (EXPENSE + WITHDRAWAL + TRANSFER_OUT), and a list of all wallets with individual balances.
 //	@Tags			Transaction
 //	@Produce		json
 //	@Security		ApiKeyAuth
-//	@Success		200	{object}	dto.Response{data=dto.SummaryResponse}
-//	@Failure		401	{object}	dto.Response	"Unauthorized"
+//	@Success		200	{object}	dto.Response{data=dto.SummaryResponse}	"Summary data"
+//	@Failure		401	{object}	dto.Response							"Unauthorized"
 //	@Failure		500	{object}	dto.Response
 //	@Router			/transaction/summary [get]
 func (t *TransactionController) GetSummary(ctx *gin.Context) {
@@ -96,27 +96,42 @@ func (t *TransactionController) GetSummary(ctx *gin.Context) {
 
 	summary, err := t.transactionService.GetSummary(ctx.Request.Context(), email)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, dto.Response{Message: "Failed to fetch transaction summary", Success: false, Error: err.Error()})
+		ctx.JSON(http.StatusInternalServerError, dto.Response{Message: "Failed to fetch summary", Success: false, Error: err.Error()})
 		return
 	}
 
+	wallets := make([]dto.WalletItem, 0, len(summary.Wallets))
+	for _, w := range summary.Wallets {
+		wallets = append(wallets, dto.WalletItem{
+			ID:      w.ID.String(),
+			Label:   w.Label,
+			Balance: w.Balance,
+		})
+	}
+
 	ctx.JSON(http.StatusOK, dto.Response{
-		Data:    dto.SummaryResponse{CurrentBalance: summary.CurrentBalance, TotalIncome: summary.TotalIncome, TotalExpense: summary.TotalExpense},
-		Message: "Transaction summary successfully retrieved",
+		Data: dto.SummaryResponse{
+			CurrentBalance: summary.CurrentBalance,
+			TotalIncome:    summary.TotalIncome,
+			TotalExpense:   summary.TotalExpense,
+			Wallets:        wallets,
+		},
+		Message: "Summary successfully retrieved",
 		Success: true,
 	})
 }
 
 // GetTransactionReport godoc
 //
-//	@Summary		Get chart report
-//	@Description	Returns income vs expense chart data. Use range=7days for daily buckets (last 7 days) or range=30days for weekly buckets (last 30 days).
+//	@Summary		Dashboard — graph data
+//	@Description	Returns chart data for the dashboard graph. Filter by type (income/expense/both) and date range (7days/30days). 7days returns daily buckets (Mon–Sun label). 30days returns weekly buckets (W## label).
 //	@Tags			Transaction
 //	@Produce		json
 //	@Security		ApiKeyAuth
-//	@Param			range	query		string	false	"Time range"	Enums(7days, 30days)	default(7days)
+//	@Param			range	query		string	false	"Date range"	Enums(7days, 30days)		default(7days)
+//	@Param			type	query		string	false	"Data type"		Enums(income, expense, both)	default(both)
 //	@Success		200		{object}	dto.Response{data=dto.TransactionReportResponse}
-//	@Failure		400		{object}	dto.Response	"Invalid range parameter"
+//	@Failure		400		{object}	dto.Response	"Invalid parameter"
 //	@Failure		401		{object}	dto.Response	"Unauthorized"
 //	@Failure		500		{object}	dto.Response
 //	@Router			/transaction/report [get]
@@ -129,24 +144,44 @@ func (t *TransactionController) GetTransactionReport(ctx *gin.Context) {
 
 	rangeParam := ctx.DefaultQuery("range", "7days")
 	if rangeParam != "7days" && rangeParam != "30days" {
-		ctx.JSON(http.StatusBadRequest, dto.Response{Message: "Invalid range parameter", Success: false, Error: "range must be '7days' or '30days'"})
+		ctx.JSON(http.StatusBadRequest, dto.Response{Message: "Invalid range", Success: false, Error: "range must be '7days' or '30days'"})
 		return
 	}
 
-	points, err := t.transactionService.GetTransactionReport(ctx.Request.Context(), email, rangeParam)
+	typeFilter := ctx.DefaultQuery("type", "both")
+	if typeFilter != "income" && typeFilter != "expense" && typeFilter != "both" {
+		ctx.JSON(http.StatusBadRequest, dto.Response{Message: "Invalid type", Success: false, Error: "type must be 'income', 'expense', or 'both'"})
+		return
+	}
+
+	points, err := t.transactionService.GetTransactionReport(ctx.Request.Context(), email, rangeParam, typeFilter)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, dto.Response{Message: "Failed to fetch transaction report", Success: false, Error: err.Error()})
+		ctx.JSON(http.StatusInternalServerError, dto.Response{Message: "Failed to fetch report", Success: false, Error: err.Error()})
 		return
 	}
 
 	resp := make([]dto.ChartPointResponse, 0, len(points))
 	for _, p := range points {
-		resp = append(resp, dto.ChartPointResponse{Label: p.Label, Income: p.Income, Expense: p.Expense})
+		item := dto.ChartPointResponse{Label: p.Label}
+		switch typeFilter {
+		case "income":
+			item.Income = p.Income
+		case "expense":
+			item.Expense = p.Expense
+		default:
+			item.Income = p.Income
+			item.Expense = p.Expense
+		}
+		resp = append(resp, item)
 	}
 
 	ctx.JSON(http.StatusOK, dto.Response{
-		Data:    dto.TransactionReportResponse{Range: rangeParam, Points: resp},
-		Message: "Transaction report successfully retrieved",
+		Data: dto.TransactionReportResponse{
+			Range:  rangeParam,
+			Type:   typeFilter,
+			Points: resp,
+		},
+		Message: "Report successfully retrieved",
 		Success: true,
 	})
 }
@@ -159,7 +194,7 @@ func (t *TransactionController) GetTransactionReport(ctx *gin.Context) {
 //	@Produce		json
 //	@Security		ApiKeyAuth
 //	@Param			wallet_id	query		string	false	"Filter by wallet UUID"
-//	@Param			page		query		int		false	"Page number"		default(1)
+//	@Param			page		query		int		false	"Page number"				default(1)
 //	@Param			limit		query		int		false	"Items per page (max 100)"	default(10)
 //	@Success		200			{object}	dto.Response{data=dto.TransactionListResponse}
 //	@Failure		400			{object}	dto.Response	"Invalid wallet_id"
@@ -227,7 +262,7 @@ func (t *TransactionController) GetTransactions(ctx *gin.Context) {
 //	@Success		200	{object}	dto.Response{data=dto.TransactionResponse}
 //	@Failure		400	{object}	dto.Response	"Invalid UUID"
 //	@Failure		401	{object}	dto.Response	"Unauthorized"
-//	@Failure		404	{object}	dto.Response	"Transaction not found"
+//	@Failure		404	{object}	dto.Response	"Not found"
 //	@Router			/transaction/{id} [get]
 func (t *TransactionController) GetTransactionByID(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
@@ -254,14 +289,14 @@ func (t *TransactionController) GetTransactionByID(ctx *gin.Context) {
 // CreateTopup godoc
 //
 //	@Summary		Initiate a top-up
-//	@Description	Creates a PENDING top-up record. The wallet balance is NOT credited yet. Call PATCH /transaction/topup/{id}/confirm to complete it.
+//	@Description	Creates a PENDING top-up record. Wallet balance is NOT credited yet — call PATCH /transaction/topup/{id}/confirm to complete it.
 //	@Tags			Transaction
 //	@Accept			json
 //	@Produce		json
 //	@Security		ApiKeyAuth
 //	@Param			body	body		dto.TopupRequest				true	"Top-up payload"
 //	@Success		201		{object}	dto.Response{data=dto.TopupResponse}
-//	@Failure		400		{object}	dto.Response	"Invalid payload or wallet_id"
+//	@Failure		400		{object}	dto.Response	"Invalid payload"
 //	@Failure		401		{object}	dto.Response	"Unauthorized"
 //	@Failure		500		{object}	dto.Response
 //	@Router			/transaction/topup [post]
@@ -322,7 +357,7 @@ func (t *TransactionController) CreateTopup(ctx *gin.Context) {
 // ConfirmTopup godoc
 //
 //	@Summary		Confirm a top-up
-//	@Description	Sets the top-up status to SUCCESS and credits the wallet balance atomically. Only works on PENDING top-ups.
+//	@Description	Sets the top-up to SUCCESS and credits the wallet balance atomically. Only works on PENDING top-ups.
 //	@Tags			Transaction
 //	@Produce		json
 //	@Security		ApiKeyAuth
@@ -373,7 +408,7 @@ func (t *TransactionController) ConfirmTopup(ctx *gin.Context) {
 // CreateWithdrawal godoc
 //
 //	@Summary		Withdraw to bank account
-//	@Description	Debits the wallet and records a WITHDRAWAL transaction atomically. Admin fee of Rp 6.500 is applied. PIN required.
+//	@Description	Debits the wallet and records a WITHDRAWAL transaction atomically. Admin fee: Rp 6.500. PIN required.
 //	@Tags			Transaction
 //	@Accept			json
 //	@Produce		json
@@ -446,7 +481,7 @@ func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 // CreateTransfer godoc
 //
 //	@Summary		Transfer funds between wallets
-//	@Description	Atomically debits the sender wallet and credits the recipient wallet. Creates TRANSFER_OUT and TRANSFER_IN ledger entries linked by a transfer_code. PIN required.
+//	@Description	Atomically debits sender and credits recipient. Creates TRANSFER_OUT and TRANSFER_IN entries linked by a transfer_code. PIN required.
 //	@Tags			Transaction
 //	@Accept			json
 //	@Produce		json
@@ -492,7 +527,6 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 	}
 
 	const transferAdminFee int64 = 0
-
 	transfer, senderTx, recipientTx, err := t.transactionService.CreateTransfer(
 		ctx.Request.Context(), senderWalletID, recipientWalletID, body.Amount, transferAdminFee, note,
 	)
@@ -577,11 +611,10 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 		return
 	}
 
-	cat := ""
+	cat, merch := "", ""
 	if category != nil {
 		cat = *category
 	}
-	merch := ""
 	if merchantName != nil {
 		merch = *merchantName
 	}
@@ -605,7 +638,7 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 // FindReceivers godoc
 //
 //	@Summary		Search transfer receivers
-//	@Description	Search other users by full name or phone number (case-insensitive, partial match). The calling user is excluded. Only users who have set their full_name or phone are searchable.
+//	@Description	Search users by full name or phone number (case-insensitive, partial match). Excludes the calling user. Only users who have set their full_name or phone are searchable.
 //	@Tags			Transaction
 //	@Produce		json
 //	@Security		ApiKeyAuth
@@ -613,8 +646,8 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 //	@Param			page	query		int		false	"Page number"				default(1)
 //	@Param			limit	query		int		false	"Items per page (max 50)"	default(10)
 //	@Success		200		{object}	dto.Response{data=dto.ReceiverListResponse}
-//	@Failure		400		{object}	dto.Response	"Missing or too short query"
-//	@Failure		401		{object}	dto.Response
+//	@Failure		400		{object}	dto.Response	"Query too short"
+//	@Failure		401		{object}	dto.Response	"Unauthorized"
 //	@Failure		500		{object}	dto.Response
 //	@Router			/transaction/receiver [get]
 func (t *TransactionController) FindReceivers(ctx *gin.Context) {
@@ -626,11 +659,7 @@ func (t *TransactionController) FindReceivers(ctx *gin.Context) {
 
 	query := ctx.Query("q")
 	if len(query) < 2 {
-		ctx.JSON(http.StatusBadRequest, dto.Response{
-			Message: "Invalid search query",
-			Success: false,
-			Error:   "q must be at least 2 characters",
-		})
+		ctx.JSON(http.StatusBadRequest, dto.Response{Message: "Invalid search query", Success: false, Error: "q must be at least 2 characters"})
 		return
 	}
 
@@ -670,12 +699,7 @@ func (t *TransactionController) FindReceivers(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, dto.Response{
-		Data: dto.ReceiverListResponse{
-			Data:  resp,
-			Total: total,
-			Page:  page,
-			Limit: limit,
-		},
+		Data:    dto.ReceiverListResponse{Data: resp, Total: total, Page: page, Limit: limit},
 		Message: "Receivers found",
 		Success: true,
 	})

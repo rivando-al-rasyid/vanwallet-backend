@@ -19,10 +19,10 @@ func NewTransactionRepo(db *pgxpool.Pool) *TransactionRepo {
 	return &TransactionRepo{db: db}
 }
 
-// GetSummary returns aggregated balance, income, and expense for the user.
-// Income = sum of TRANSFER_IN. Expense = sum of EXPENSE + WITHDRAWAL + TRANSFER_OUT (incl. admin_fee).
+// GetSummary returns aggregated balance, income, expense, and per-wallet breakdown.
 func (t *TransactionRepo) GetSummary(ctx context.Context, email string) (model.TransactionSummary, error) {
-	sql := `
+	// Aggregate totals
+	aggSQL := `
 	WITH TargetUser AS (
 		SELECT id FROM users WHERE email = $1
 	),
@@ -30,72 +30,98 @@ func (t *TransactionRepo) GetSummary(ctx context.Context, email string) (model.T
 		SELECT id, balance FROM wallets WHERE user_id IN (SELECT id FROM TargetUser)
 	),
 	WalletAgg AS (
-		SELECT COALESCE(SUM(balance), 0) AS current_balance
-		FROM UserWallets
+		SELECT COALESCE(SUM(balance), 0) AS current_balance FROM UserWallets
 	),
 	TransactionAgg AS (
 		SELECT
-			COALESCE(SUM(CASE WHEN type = 'TRANSFER_IN' AND status = 'SUCCESS' THEN amount ELSE 0 END), 0) AS total_income,
+			COALESCE(SUM(CASE WHEN type = 'TRANSFER_IN'  AND status = 'SUCCESS' THEN amount ELSE 0 END), 0) AS total_income,
 			COALESCE(SUM(CASE WHEN type IN ('EXPENSE','WITHDRAWAL','TRANSFER_OUT') AND status = 'SUCCESS' THEN (amount + admin_fee) ELSE 0 END), 0) AS total_expense
 		FROM transactions
 		WHERE wallet_id IN (SELECT id FROM UserWallets)
 	)
-	SELECT
-		wa.current_balance,
-		ta.total_income,
-		ta.total_expense
-	FROM WalletAgg wa
-	CROSS JOIN TransactionAgg ta;`
+	SELECT wa.current_balance, ta.total_income, ta.total_expense
+	FROM WalletAgg wa CROSS JOIN TransactionAgg ta`
 
 	var s model.TransactionSummary
-	err := t.db.QueryRow(ctx, sql, email).Scan(
-		&s.CurrentBalance,
-		&s.TotalIncome,
-		&s.TotalExpense,
-	)
-	if err != nil {
+	if err := t.db.QueryRow(ctx, aggSQL, email).Scan(
+		&s.CurrentBalance, &s.TotalIncome, &s.TotalExpense,
+	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return model.TransactionSummary{}, errors.New("user not found")
 		}
-		return model.TransactionSummary{}, err
+		return model.TransactionSummary{}, fmt.Errorf("GetSummary agg: %w", err)
 	}
+
+	// Wallet list
+	rows, err := t.db.Query(ctx, `
+		SELECT w.id, w.label, w.balance
+		FROM wallets w
+		JOIN users u ON w.user_id = u.id
+		WHERE u.email = $1
+		ORDER BY w.created_at ASC`, email)
+	if err != nil {
+		return model.TransactionSummary{}, fmt.Errorf("GetSummary wallets: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var w model.WalletSummary
+		if err := rows.Scan(&w.ID, &w.Label, &w.Balance); err != nil {
+			return model.TransactionSummary{}, fmt.Errorf("GetSummary wallet scan: %w", err)
+		}
+		s.Wallets = append(s.Wallets, w)
+	}
+	if err := rows.Err(); err != nil {
+		return model.TransactionSummary{}, fmt.Errorf("GetSummary wallet rows: %w", err)
+	}
+
 	return s, nil
 }
 
-// GetTransactionReport returns daily (7days) or weekly (30days) buckets.
-func (t *TransactionRepo) GetTransactionReport(ctx context.Context, email string, rangeParam string) ([]model.ChartPoint, error) {
-	var sql string
+// GetTransactionReport returns daily (7days) or weekly (30days) chart buckets.
+// typeFilter: "income" | "expense" | "both"
+func (t *TransactionRepo) GetTransactionReport(ctx context.Context, email, rangeParam, typeFilter string) ([]model.ChartPoint, error) {
+	var dateTrunc, dateLabel, interval string
 
 	switch rangeParam {
 	case "30days":
-		sql = `
-		WITH UserWallets AS (
-			SELECT w.id FROM wallets w JOIN users u ON w.user_id = u.id WHERE u.email = $1
-		)
-		SELECT
-			'W' || TO_CHAR(DATE_TRUNC('week', created_at), 'IW') AS label,
-			COALESCE(SUM(CASE WHEN type = 'TRANSFER_IN' AND status = 'SUCCESS' THEN amount ELSE 0 END), 0) AS income,
-			COALESCE(SUM(CASE WHEN type IN ('EXPENSE','WITHDRAWAL','TRANSFER_OUT') AND status = 'SUCCESS' THEN (amount + admin_fee) ELSE 0 END), 0) AS expense
-		FROM transactions
-		WHERE wallet_id IN (SELECT id FROM UserWallets)
-		  AND created_at >= NOW() - INTERVAL '30 days'
-		GROUP BY DATE_TRUNC('week', created_at)
-		ORDER BY DATE_TRUNC('week', created_at);`
-	default:
-		sql = `
-		WITH UserWallets AS (
-			SELECT w.id FROM wallets w JOIN users u ON w.user_id = u.id WHERE u.email = $1
-		)
-		SELECT
-			TO_CHAR(DATE_TRUNC('day', created_at), 'Dy') AS label,
-			COALESCE(SUM(CASE WHEN type = 'TRANSFER_IN' AND status = 'SUCCESS' THEN amount ELSE 0 END), 0) AS income,
-			COALESCE(SUM(CASE WHEN type IN ('EXPENSE','WITHDRAWAL','TRANSFER_OUT') AND status = 'SUCCESS' THEN (amount + admin_fee) ELSE 0 END), 0) AS expense
-		FROM transactions
-		WHERE wallet_id IN (SELECT id FROM UserWallets)
-		  AND created_at >= NOW() - INTERVAL '7 days'
-		GROUP BY DATE_TRUNC('day', created_at)
-		ORDER BY DATE_TRUNC('day', created_at);`
+		dateTrunc = "week"
+		dateLabel = "'W' || TO_CHAR(DATE_TRUNC('week', created_at), 'IW')"
+		interval = "30 days"
+	default: // 7days
+		dateTrunc = "day"
+		dateLabel = "TO_CHAR(DATE_TRUNC('day', created_at), 'Dy')"
+		interval = "7 days"
 	}
+
+	var incomeExpr, expenseExpr string
+	switch typeFilter {
+	case "income":
+		incomeExpr = "COALESCE(SUM(CASE WHEN type = 'TRANSFER_IN' AND status = 'SUCCESS' THEN amount ELSE 0 END), 0)"
+		expenseExpr = "0"
+	case "expense":
+		incomeExpr = "0"
+		expenseExpr = "COALESCE(SUM(CASE WHEN type IN ('EXPENSE','WITHDRAWAL','TRANSFER_OUT') AND status = 'SUCCESS' THEN (amount + admin_fee) ELSE 0 END), 0)"
+	default: // both
+		incomeExpr = "COALESCE(SUM(CASE WHEN type = 'TRANSFER_IN' AND status = 'SUCCESS' THEN amount ELSE 0 END), 0)"
+		expenseExpr = "COALESCE(SUM(CASE WHEN type IN ('EXPENSE','WITHDRAWAL','TRANSFER_OUT') AND status = 'SUCCESS' THEN (amount + admin_fee) ELSE 0 END), 0)"
+	}
+
+	sql := fmt.Sprintf(`
+		WITH UserWallets AS (
+			SELECT w.id FROM wallets w JOIN users u ON w.user_id = u.id WHERE u.email = $1
+		)
+		SELECT
+			%s AS label,
+			%s AS income,
+			%s AS expense
+		FROM transactions
+		WHERE wallet_id IN (SELECT id FROM UserWallets)
+		  AND created_at >= NOW() - INTERVAL '%s'
+		GROUP BY DATE_TRUNC('%s', created_at)
+		ORDER BY DATE_TRUNC('%s', created_at)`,
+		dateLabel, incomeExpr, expenseExpr, interval, dateTrunc, dateTrunc,
+	)
 
 	rows, err := t.db.Query(ctx, sql, email)
 	if err != nil {
@@ -111,14 +137,13 @@ func (t *TransactionRepo) GetTransactionReport(ctx context.Context, email string
 		}
 		result = append(result, cp)
 	}
-	return result, nil
+	return result, rows.Err()
 }
 
 // GetTransactionsByWallet returns paginated transactions for a wallet owned by the user.
 func (t *TransactionRepo) GetTransactionsByWallet(ctx context.Context, email string, walletID uuid.UUID, page, limit int) ([]model.Transaction, int, error) {
 	offset := (page - 1) * limit
 
-	// Verify ownership
 	var wid uuid.UUID
 	if err := t.db.QueryRow(ctx, `
 		SELECT w.id FROM wallets w JOIN users u ON w.user_id = u.id
@@ -136,10 +161,8 @@ func (t *TransactionRepo) GetTransactionsByWallet(ctx context.Context, email str
 
 	rows, err := t.db.Query(ctx, `
 		SELECT id, wallet_id, type, amount, admin_fee, status, idempotency_key, note, created_at, updated_at
-		FROM transactions
-		WHERE wallet_id = $1
-		ORDER BY created_at DESC
-		LIMIT $2 OFFSET $3`, walletID, limit, offset)
+		FROM transactions WHERE wallet_id = $1
+		ORDER BY created_at DESC LIMIT $2 OFFSET $3`, walletID, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("GetTransactionsByWallet query: %w", err)
 	}
@@ -169,8 +192,7 @@ func (t *TransactionRepo) GetAllTransactions(ctx context.Context, email string, 
 		JOIN wallets w ON tr.wallet_id = w.id
 		JOIN users u ON w.user_id = u.id
 		WHERE u.email = $1
-		ORDER BY tr.created_at DESC
-		LIMIT $2 OFFSET $3`, email, limit, offset)
+		ORDER BY tr.created_at DESC LIMIT $2 OFFSET $3`, email, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("GetAllTransactions query: %w", err)
 	}
@@ -199,8 +221,7 @@ func (t *TransactionRepo) GetTransactionByID(ctx context.Context, email string, 
 	return tx, nil
 }
 
-// CreateTopup creates a standalone top-up record in a DB transaction and credits the wallet.
-// Status starts as PENDING — a webhook/callback should confirm and set SUCCESS.
+// CreateTopup creates a PENDING topup record.
 func (t *TransactionRepo) CreateTopup(ctx context.Context, req model.Topup) (model.Topup, error) {
 	tx, err := t.db.Begin(ctx)
 	if err != nil {
@@ -208,7 +229,6 @@ func (t *TransactionRepo) CreateTopup(ctx context.Context, req model.Topup) (mod
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	// Verify wallet ownership is done at service/controller level before calling here.
 	var topup model.Topup
 	err = tx.QueryRow(ctx, `
 		INSERT INTO topups (wallet_id, amount, status, payment_method)
@@ -222,14 +242,13 @@ func (t *TransactionRepo) CreateTopup(ctx context.Context, req model.Topup) (mod
 	if err != nil {
 		return model.Topup{}, fmt.Errorf("CreateTopup insert: %w", err)
 	}
-
 	if err = tx.Commit(ctx); err != nil {
 		return model.Topup{}, fmt.Errorf("CreateTopup commit: %w", err)
 	}
 	return topup, nil
 }
 
-// ConfirmTopup sets a topup to SUCCESS and credits the wallet balance atomically.
+// ConfirmTopup sets topup to SUCCESS and credits the wallet atomically.
 func (t *TransactionRepo) ConfirmTopup(ctx context.Context, topupID uuid.UUID) (model.Topup, error) {
 	tx, err := t.db.Begin(ctx)
 	if err != nil {
@@ -267,8 +286,7 @@ func (t *TransactionRepo) ConfirmTopup(ctx context.Context, topupID uuid.UUID) (
 	return topup, nil
 }
 
-// CreateWithdrawal inserts a WITHDRAWAL transaction + withdrawals detail row,
-// and debits the wallet balance — all atomically.
+// CreateWithdrawal inserts a WITHDRAWAL transaction + detail, debits wallet atomically.
 func (t *TransactionRepo) CreateWithdrawal(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, bank model.Withdrawal) (model.Transaction, error) {
 	tx, err := t.db.Begin(ctx)
 	if err != nil {
@@ -276,19 +294,16 @@ func (t *TransactionRepo) CreateWithdrawal(ctx context.Context, walletID uuid.UU
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	// Check sufficient balance (amount + adminFee)
 	var balance int64
 	if err = tx.QueryRow(ctx,
 		`SELECT balance FROM wallets WHERE id = $1 FOR UPDATE`, walletID,
 	).Scan(&balance); err != nil {
 		return model.Transaction{}, fmt.Errorf("CreateWithdrawal lock wallet: %w", err)
 	}
-	total := amount + adminFee
-	if balance < total {
+	if balance < amount+adminFee {
 		return model.Transaction{}, errors.New("insufficient balance")
 	}
 
-	// Insert transaction row
 	var txRow model.Transaction
 	err = tx.QueryRow(ctx, `
 		INSERT INTO transactions (wallet_id, type, amount, admin_fee, status)
@@ -303,24 +318,20 @@ func (t *TransactionRepo) CreateWithdrawal(ctx context.Context, walletID uuid.UU
 		return model.Transaction{}, fmt.Errorf("CreateWithdrawal insert transaction: %w", err)
 	}
 
-	// Insert withdrawal detail
-	if _, err = tx.Exec(ctx, `
-		INSERT INTO withdrawals (transaction_id, bank_name, account_number, account_holder)
-		VALUES ($1, $2, $3, $4)`,
+	if _, err = tx.Exec(ctx,
+		`INSERT INTO withdrawals (transaction_id, bank_name, account_number, account_holder) VALUES ($1, $2, $3, $4)`,
 		txRow.ID, bank.BankName, bank.AccountNumber, bank.AccountHolder,
 	); err != nil {
 		return model.Transaction{}, fmt.Errorf("CreateWithdrawal insert detail: %w", err)
 	}
 
-	// Debit wallet
 	if _, err = tx.Exec(ctx,
 		`UPDATE wallets SET balance = balance - $1, updated_at = now() WHERE id = $2`,
-		total, walletID,
+		amount+adminFee, walletID,
 	); err != nil {
 		return model.Transaction{}, fmt.Errorf("CreateWithdrawal debit wallet: %w", err)
 	}
 
-	// Mark transaction SUCCESS
 	if _, err = tx.Exec(ctx,
 		`UPDATE transactions SET status = 'SUCCESS', updated_at = now() WHERE id = $1`, txRow.ID,
 	); err != nil {
@@ -334,12 +345,7 @@ func (t *TransactionRepo) CreateWithdrawal(ctx context.Context, walletID uuid.UU
 	return txRow, nil
 }
 
-// CreateTransfer executes a peer-to-peer transfer atomically:
-//  1. Lock and check sender balance
-//  2. Insert TRANSFER_OUT transaction (sender)
-//  3. Insert TRANSFER_IN  transaction (recipient)
-//  4. Insert transfers link row
-//  5. Debit sender wallet, credit recipient wallet
+// CreateTransfer executes a peer-to-peer transfer atomically.
 func (t *TransactionRepo) CreateTransfer(ctx context.Context, senderWalletID, recipientWalletID uuid.UUID, amount, adminFee int64, note *string) (model.Transfer, model.Transaction, model.Transaction, error) {
 	tx, err := t.db.Begin(ctx)
 	if err != nil {
@@ -347,26 +353,22 @@ func (t *TransactionRepo) CreateTransfer(ctx context.Context, senderWalletID, re
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	// Lock sender wallet and check balance
 	var senderBalance int64
 	if err = tx.QueryRow(ctx,
 		`SELECT balance FROM wallets WHERE id = $1 FOR UPDATE`, senderWalletID,
 	).Scan(&senderBalance); err != nil {
-		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer lock sender wallet: %w", err)
+		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer lock sender: %w", err)
 	}
-	total := amount + adminFee
-	if senderBalance < total {
+	if senderBalance < amount+adminFee {
 		return model.Transfer{}, model.Transaction{}, model.Transaction{}, errors.New("insufficient balance")
 	}
 
-	// Lock recipient wallet (prevent deadlock with consistent ordering)
 	if _, err = tx.Exec(ctx,
 		`SELECT id FROM wallets WHERE id = $1 FOR UPDATE`, recipientWalletID,
 	); err != nil {
-		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer lock recipient wallet: %w", err)
+		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer lock recipient: %w", err)
 	}
 
-	// Insert TRANSFER_OUT (sender)
 	var senderTx model.Transaction
 	err = tx.QueryRow(ctx, `
 		INSERT INTO transactions (wallet_id, type, amount, admin_fee, status, note)
@@ -378,10 +380,9 @@ func (t *TransactionRepo) CreateTransfer(ctx context.Context, senderWalletID, re
 		&senderTx.AdminFee, &senderTx.Status, &senderTx.IdempotencyKey, &senderTx.Note, &senderTx.CreatedAt, &senderTx.UpdatedAt,
 	)
 	if err != nil {
-		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer insert TRANSFER_OUT: %w", err)
+		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer TRANSFER_OUT: %w", err)
 	}
 
-	// Insert TRANSFER_IN (recipient)
 	var recipientTx model.Transaction
 	err = tx.QueryRow(ctx, `
 		INSERT INTO transactions (wallet_id, type, amount, admin_fee, status, note)
@@ -393,51 +394,41 @@ func (t *TransactionRepo) CreateTransfer(ctx context.Context, senderWalletID, re
 		&recipientTx.AdminFee, &recipientTx.Status, &recipientTx.IdempotencyKey, &recipientTx.Note, &recipientTx.CreatedAt, &recipientTx.UpdatedAt,
 	)
 	if err != nil {
-		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer insert TRANSFER_IN: %w", err)
+		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer TRANSFER_IN: %w", err)
 	}
 
-	// Generate transfer_code
 	transferCode := fmt.Sprintf("TRF-%s", senderTx.ID.String()[:8])
-
-	// Insert transfers link
 	var transfer model.Transfer
 	err = tx.QueryRow(ctx, `
 		INSERT INTO transfers (transaction_id, recipient_transaction_id, transfer_code)
 		VALUES ($1, $2, $3)
 		RETURNING transaction_id, recipient_transaction_id, transfer_code, created_at`,
 		senderTx.ID, recipientTx.ID, transferCode,
-	).Scan(
-		&transfer.TransactionID, &transfer.RecipientTransactionID,
-		&transfer.TransferCode, &transfer.CreatedAt,
-	)
+	).Scan(&transfer.TransactionID, &transfer.RecipientTransactionID, &transfer.TransferCode, &transfer.CreatedAt)
 	if err != nil {
-		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer insert link: %w", err)
+		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer link: %w", err)
 	}
 
-	// Debit sender
 	if _, err = tx.Exec(ctx,
 		`UPDATE wallets SET balance = balance - $1, updated_at = now() WHERE id = $2`,
-		total, senderWalletID,
+		amount+adminFee, senderWalletID,
 	); err != nil {
-		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer debit sender: %w", err)
+		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer debit: %w", err)
 	}
-
-	// Credit recipient
 	if _, err = tx.Exec(ctx,
 		`UPDATE wallets SET balance = balance + $1, updated_at = now() WHERE id = $2`,
 		amount, recipientWalletID,
 	); err != nil {
-		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer credit recipient: %w", err)
+		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer credit: %w", err)
 	}
 
 	if err = tx.Commit(ctx); err != nil {
 		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer commit: %w", err)
 	}
-
 	return transfer, senderTx, recipientTx, nil
 }
 
-// CreateExpense inserts an EXPENSE transaction + expenses detail row, and debits the wallet.
+// CreateExpense inserts an EXPENSE transaction + detail, debits wallet atomically.
 func (t *TransactionRepo) CreateExpense(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, category, merchantName, note *string) (model.Transaction, error) {
 	tx, err := t.db.Begin(ctx)
 	if err != nil {
@@ -445,7 +436,6 @@ func (t *TransactionRepo) CreateExpense(ctx context.Context, walletID uuid.UUID,
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	// Check balance
 	var balance int64
 	if err = tx.QueryRow(ctx,
 		`SELECT balance FROM wallets WHERE id = $1 FOR UPDATE`, walletID,
@@ -456,7 +446,6 @@ func (t *TransactionRepo) CreateExpense(ctx context.Context, walletID uuid.UUID,
 		return model.Transaction{}, errors.New("insufficient balance")
 	}
 
-	// Insert transaction
 	var txRow model.Transaction
 	err = tx.QueryRow(ctx, `
 		INSERT INTO transactions (wallet_id, type, amount, admin_fee, status, note)
@@ -471,7 +460,6 @@ func (t *TransactionRepo) CreateExpense(ctx context.Context, walletID uuid.UUID,
 		return model.Transaction{}, fmt.Errorf("CreateExpense insert transaction: %w", err)
 	}
 
-	// Insert expense detail
 	if _, err = tx.Exec(ctx,
 		`INSERT INTO expenses (transaction_id, category, merchant_name) VALUES ($1, $2, $3)`,
 		txRow.ID, category, merchantName,
@@ -479,7 +467,6 @@ func (t *TransactionRepo) CreateExpense(ctx context.Context, walletID uuid.UUID,
 		return model.Transaction{}, fmt.Errorf("CreateExpense insert detail: %w", err)
 	}
 
-	// Debit wallet
 	if _, err = tx.Exec(ctx,
 		`UPDATE wallets SET balance = balance - $1, updated_at = now() WHERE id = $2`,
 		amount+adminFee, walletID,
@@ -493,7 +480,6 @@ func (t *TransactionRepo) CreateExpense(ctx context.Context, walletID uuid.UUID,
 	return txRow, nil
 }
 
-// scanTransactions is a helper to scan transaction rows.
 func scanTransactions(rows pgx.Rows) ([]model.Transaction, error) {
 	var result []model.Transaction
 	for rows.Next() {
@@ -509,8 +495,7 @@ func scanTransactions(rows pgx.Rows) ([]model.Transaction, error) {
 	return result, rows.Err()
 }
 
-// SearchReceivers searches users by full_name or phone (case-insensitive, partial match)
-// for use in the transfer flow. Excludes the calling user.
+// SearchReceivers searches users by full_name or phone for the transfer flow.
 func (t *TransactionRepo) SearchReceivers(ctx context.Context, callerEmail, query string, page, limit int) ([]model.ReceiverResult, int, error) {
 	offset := (page - 1) * limit
 	like := "%" + query + "%"
@@ -529,14 +514,7 @@ func (t *TransactionRepo) SearchReceivers(ctx context.Context, callerEmail, quer
 	}
 
 	rows, err := t.db.Query(ctx, `
-		SELECT
-			u.id         AS user_id,
-			u.email,
-			p.full_name,
-			p.phone,
-			p.photo,
-			w.id         AS wallet_id,
-			w.label      AS wallet_label
+		SELECT u.id, u.email, p.full_name, p.phone, p.photo, w.id, w.label
 		FROM users u
 		JOIN profiles p ON p.user_id = u.id
 		JOIN wallets  w ON w.user_id = u.id
@@ -554,11 +532,7 @@ func (t *TransactionRepo) SearchReceivers(ctx context.Context, callerEmail, quer
 	var results []model.ReceiverResult
 	for rows.Next() {
 		var r model.ReceiverResult
-		if err := rows.Scan(
-			&r.UserID, &r.Email,
-			&r.FullName, &r.Phone, &r.Photo,
-			&r.WalletID, &r.WalletLabel,
-		); err != nil {
+		if err := rows.Scan(&r.UserID, &r.Email, &r.FullName, &r.Phone, &r.Photo, &r.WalletID, &r.WalletLabel); err != nil {
 			return nil, 0, fmt.Errorf("SearchReceivers scan: %w", err)
 		}
 		results = append(results, r)

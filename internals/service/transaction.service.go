@@ -9,20 +9,15 @@ import (
 
 type TransactionRepository interface {
 	GetSummary(ctx context.Context, email string) (model.TransactionSummary, error)
-	GetTransactionReport(ctx context.Context, email string, rangeParam string) ([]model.ChartPoint, error)
+	GetTransactionReport(ctx context.Context, email, rangeParam, typeFilter string) ([]model.ChartPoint, error)
 	GetTransactionsByWallet(ctx context.Context, email string, walletID uuid.UUID, page, limit int) ([]model.Transaction, int, error)
 	GetAllTransactions(ctx context.Context, email string, page, limit int) ([]model.Transaction, int, error)
 	GetTransactionByID(ctx context.Context, email string, transactionID uuid.UUID) (model.Transaction, error)
-
 	CreateTopup(ctx context.Context, req model.Topup) (model.Topup, error)
 	ConfirmTopup(ctx context.Context, topupID uuid.UUID) (model.Topup, error)
-
 	CreateWithdrawal(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, bank model.Withdrawal) (model.Transaction, error)
-
 	CreateTransfer(ctx context.Context, senderWalletID, recipientWalletID uuid.UUID, amount, adminFee int64, note *string) (model.Transfer, model.Transaction, model.Transaction, error)
-
 	CreateExpense(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, category, merchantName, note *string) (model.Transaction, error)
-
 	SearchReceivers(ctx context.Context, callerEmail, query string, page, limit int) ([]model.ReceiverResult, int, error)
 }
 
@@ -38,8 +33,9 @@ func (s *TransactionService) GetSummary(ctx context.Context, email string) (mode
 	return s.repo.GetSummary(ctx, email)
 }
 
-func (s *TransactionService) GetTransactionReport(ctx context.Context, email string, rangeParam string) ([]model.ChartPoint, error) {
-	return s.repo.GetTransactionReport(ctx, email, rangeParam)
+// GetTransactionReport now accepts typeFilter: "income" | "expense" | "both"
+func (s *TransactionService) GetTransactionReport(ctx context.Context, email, rangeParam, typeFilter string) ([]model.ChartPoint, error) {
+	return s.repo.GetTransactionReport(ctx, email, rangeParam, typeFilter)
 }
 
 func (s *TransactionService) GetTransactionsByWallet(ctx context.Context, email string, walletID uuid.UUID, page, limit int) ([]model.Transaction, int, error) {

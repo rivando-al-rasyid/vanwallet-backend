@@ -1,0 +1,11 @@
+ALTER TABLE "withdrawals" DROP CONSTRAINT IF EXISTS "withdrawals_transaction_id_fkey";
+ALTER TABLE "expenses" DROP CONSTRAINT IF EXISTS "expenses_transaction_id_fkey";
+ALTER TABLE "transfers" DROP CONSTRAINT IF EXISTS "transfers_recipient_transaction_id_fkey";
+ALTER TABLE "transfers" DROP CONSTRAINT IF EXISTS "transfers_transaction_id_fkey";
+ALTER TABLE "transactions" DROP CONSTRAINT IF EXISTS "transactions_wallet_id_fkey";
+ALTER TABLE "topups" DROP CONSTRAINT IF EXISTS "topups_wallet_id_fkey";
+ALTER TABLE "wallets" DROP CONSTRAINT IF EXISTS "wallets_user_id_fkey";
+ALTER TABLE "user_pins" DROP CONSTRAINT IF EXISTS "user_pins_user_id_fkey";
+ALTER TABLE "favorites" DROP CONSTRAINT IF EXISTS "favorites_target_user_id_fkey";
+ALTER TABLE "favorites" DROP CONSTRAINT IF EXISTS "favorites_user_id_fkey";
+ALTER TABLE "profiles" DROP CONSTRAINT IF EXISTS "profiles_user_id_fkey";

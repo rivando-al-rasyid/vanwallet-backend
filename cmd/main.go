@@ -20,10 +20,10 @@ import (
 // @host						localhost:8080
 // @BasePath					/
 
-// @securityDefinitions.apikey	ApiKeyAuth
-// @in							header
-// @name						Authorization
-// @description					Bearer token used for authorization
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
 
 func main() {
 	// Load .env — tidak fatal jika tidak ada (untuk production compatibility)

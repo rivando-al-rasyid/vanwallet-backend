@@ -226,3 +226,41 @@ func (p *ProfileController) EditPassword(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, dto.Response{Message: "Password successfully updated", Success: true})
 }
+
+// GetUserInfo godoc
+//
+//	@Summary		User info for app header
+//	@Description	Returns email, full_name, phone, photo, and current_balance (sum of all wallets). Intended for populating the persistent app header/navbar without a full dashboard call.
+//	@Tags			Profile
+//	@Produce		json
+//	@Security		ApiKeyAuth
+//	@Success		200	{object}	dto.Response{data=dto.UserInfoResponse}	"User info"
+//	@Failure		401	{object}	dto.Response							"Unauthorized"
+//	@Failure		500	{object}	dto.Response
+//	@Router			/profile/me [get]
+func (p *ProfileController) GetUserInfo(ctx *gin.Context) {
+	claims, exists := ctx.Get("claims")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, dto.Response{Message: "Unauthorized", Success: false, Error: "Missing claims"})
+		return
+	}
+	email := claims.(pkg.Claims).Email
+
+	profile, balance, err := p.profileservice.GetUserInfo(ctx.Request.Context(), email)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, dto.Response{Message: "Failed to fetch user info", Success: false, Error: "Internal server error"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, dto.Response{
+		Data: dto.UserInfoResponse{
+			Email:          email,
+			FullName:       profile.FullName,
+			Phone:          profile.Phone,
+			Photo:          profile.Photo,
+			CurrentBalance: balance,
+		},
+		Message: "User info successfully retrieved",
+		Success: true,
+	})
+}

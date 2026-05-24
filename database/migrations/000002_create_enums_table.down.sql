@@ -1,8 +1,3 @@
-DROP TYPE transaction_status CASCADE;
-
-DROP TYPE payment_method CASCADE;
-
-DROP TYPE transaction_type CASCADE;
-
-DROP TYPE token_type CASCADE;
-
+DROP TYPE IF EXISTS "transaction_type";
+DROP TYPE IF EXISTS "payment_method";
+DROP TYPE IF EXISTS "transaction_status";

@@ -1,3 +1,1 @@
--- Drop an existing database 'favorites'
-DROP TABLE favorites;
-
+DROP TABLE IF EXISTS "favorites";

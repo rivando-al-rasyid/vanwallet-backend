@@ -1,3 +1,1 @@
--- Drop an existing database 'profiles'
-DROP TABLE profiles;
-
+DROP TABLE IF EXISTS "profiles";

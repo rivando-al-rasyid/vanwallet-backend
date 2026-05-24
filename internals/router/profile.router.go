@@ -16,6 +16,10 @@ func ProfileRouter(router *gin.Engine, db *pgxpool.Pool) {
 
 	profileRouter := router.Group("/profile", middleware.VerifyTokenWithDB(db))
 
+	// Header info — lightweight, called on every page load
+	profileRouter.GET("/me", profCont.GetUserInfo)
+
+	// Full profile CRUD
 	profileRouter.GET("/", profCont.GetProfile)
 	profileRouter.POST("/", profCont.EditProfile)
 	profileRouter.POST("/change/pin", profCont.EditPin)
