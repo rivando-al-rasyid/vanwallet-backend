@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,7 +20,7 @@ func NewAuthRepo(db *pgxpool.Pool) *Authrepo {
 }
 
 // Register creates a user, profile, user_pin, and wallet atomically in one transaction.
-func (a *Authrepo) Register(ctx context.Context, email, username, hashpwd string) (model.User, error) {
+func (a *Authrepo) Register(ctx context.Context, email, hashpwd string) (model.User, error) {
 	tx, err := a.db.Begin(ctx)
 	if err != nil {
 		return model.User{}, fmt.Errorf("Register begin tx: %w", err)
@@ -28,10 +29,10 @@ func (a *Authrepo) Register(ctx context.Context, email, username, hashpwd string
 
 	var user model.User
 	err = tx.QueryRow(ctx,
-		`INSERT INTO users (email, username, password) VALUES ($1, $2, $3)
-		 RETURNING id, email, username, created_at`,
-		email, username, hashpwd,
-	).Scan(&user.ID, &user.Email, &user.Username, &user.CreatedAt)
+		`INSERT INTO users (email, password) VALUES ($1, $2)
+		 RETURNING id, email, created_at`,
+		email, hashpwd,
+	).Scan(&user.ID, &user.Email, &user.CreatedAt)
 	if err != nil {
 		return model.User{}, fmt.Errorf("Register insert user: %w", err)
 	}
@@ -57,7 +58,6 @@ func (a *Authrepo) Register(ctx context.Context, email, username, hashpwd string
 	if err = tx.Commit(ctx); err != nil {
 		return model.User{}, fmt.Errorf("Register commit: %w", err)
 	}
-
 	return user, nil
 }
 
@@ -89,9 +89,45 @@ func (a *Authrepo) GetUserPin(ctx context.Context, email string) (model.UserPin,
 	return userpin, nil
 }
 
-func (a *Authrepo) ClearToken(ctx context.Context, userID string) error {
+// SaveToken inserts a new token row into the tokens table.
+// tokenType should be model.TokenTypeRefresh for login-issued access tokens.
+func (a *Authrepo) SaveToken(ctx context.Context, userID, rawToken string, tokenType model.TokenType, expiresAt time.Time) error {
 	_, err := a.db.Exec(ctx,
-		`UPDATE users SET token = NULL, updated_at = now() WHERE id = $1`, userID,
+		`INSERT INTO tokens (user_id, token, type, expires_at)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (token) DO NOTHING`,
+		userID, rawToken, tokenType, expiresAt,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("SaveToken: %w", err)
+	}
+	return nil
+}
+
+// RevokeToken marks a specific token as revoked (logout current device).
+func (a *Authrepo) RevokeToken(ctx context.Context, rawToken string) error {
+	_, err := a.db.Exec(ctx,
+		`UPDATE tokens SET is_revoked = true WHERE token = $1`, rawToken,
+	)
+	if err != nil {
+		return fmt.Errorf("RevokeToken: %w", err)
+	}
+	return nil
+}
+
+// IsTokenValid returns true if the token exists, is not revoked, and has not expired.
+func (a *Authrepo) IsTokenValid(ctx context.Context, rawToken string) (bool, error) {
+	var valid bool
+	err := a.db.QueryRow(ctx,
+		`SELECT EXISTS(
+			SELECT 1 FROM tokens
+			WHERE token = $1
+			  AND is_revoked = false
+			  AND expires_at > now()
+		)`, rawToken,
+	).Scan(&valid)
+	if err != nil {
+		return false, fmt.Errorf("IsTokenValid: %w", err)
+	}
+	return valid, nil
 }

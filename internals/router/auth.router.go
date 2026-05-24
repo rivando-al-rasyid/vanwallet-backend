@@ -10,14 +10,18 @@ import (
 )
 
 func AuthRouter(router *gin.Engine, db *pgxpool.Pool) {
-	authRouter := router.Group("/auth")
-
 	authRepo := repository.NewAuthRepo(db)
 	authServ := service.NewAuthService(authRepo)
 	authCont := controller.NewAuthController(authServ)
 
-	authRouter.POST("/register", authCont.Register)
-	authRouter.POST("/login", authCont.Login)
-	authRouter.GET("/pin", middleware.VerifyToken, authCont.GetPIN)
+	auth := router.Group("/auth")
 
+	// Public
+	auth.POST("/register", authCont.Register)
+	auth.POST("/login", authCont.Login)
+
+	// Protected
+	protected := auth.Group("/", middleware.VerifyTokenWithDB(db))
+	protected.POST("/logout", authCont.Logout)
+	protected.GET("/pin", authCont.GetPIN)
 }

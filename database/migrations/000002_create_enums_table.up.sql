@@ -20,3 +20,9 @@ CREATE TYPE "transaction_type" AS ENUM(
     'TRANSFER_OUT'
 );
 
+CREATE TYPE "token_type" AS ENUM(
+    'REFRESH',
+    'PASSWORD_RESET',
+    'EMAIL_VERIFICATION'
+);
+
