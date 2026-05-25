@@ -18,6 +18,8 @@ func CORSMiddleware(ctx *gin.Context) {
 	allowedMethods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch, http.MethodOptions}
 	ctx.Header("Access-Control-Allow-Methods", strings.Join(allowedMethods, ", "))
 
+	ctx.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
 	if ctx.Request.Method == http.MethodOptions {
 		ctx.AbortWithStatus(http.StatusNoContent)
 		return

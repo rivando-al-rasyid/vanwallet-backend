@@ -21,14 +21,15 @@ func NewAuthController(authservice *service.AuthService) *AuthController {
 // Register godoc
 //
 //	@Summary		Register a new user
-//	@Description	Create a new account with email and password. Automatically creates a linked profile, PIN slot, and default wallet in a single transaction.
+//	@Description	Create a new account with email and password. Automatically creates a linked profile, PIN slot, and default wallet in a single atomic transaction.
 //	@Tags			Auth
 //	@Accept			json
 //	@Produce		json
-//	@Param			body	body		dto.RegisterRequest				true	"Register payload"
+//	@Param			body	body		dto.RegisterRequest					true	"Register payload"
 //	@Success		201		{object}	dto.Response{data=dto.UserResponse}	"User created"
-//	@Failure		400		{object}	dto.Response						"Invalid request body"
-//	@Failure		500		{object}	dto.Response						"Email already exists or internal error"
+//	@Failure		400		{object}	dto.Response						"Invalid or malformed request body"
+//	@Failure		409		{object}	dto.Response						"Email already registered"
+//	@Failure		500		{object}	dto.Response						"Internal server error"
 //	@Router			/auth/register [post]
 func (a *AuthController) Register(ctx *gin.Context) {
 	var body dto.RegisterRequest
@@ -63,14 +64,14 @@ func (a *AuthController) Register(ctx *gin.Context) {
 // Login godoc
 //
 //	@Summary		Login
-//	@Description	Authenticate with email and password. Returns a signed JWT (24 h). The token is persisted in the `tokens` table and can be revoked via logout.
+//	@Description	Authenticate with email and password. Returns a signed JWT valid for 24 hours. The token is persisted in the `tokens` table and can be invalidated immediately via POST /auth/logout.
 //	@Tags			Auth
 //	@Accept			json
 //	@Produce		json
 //	@Param			body	body		dto.LoginRequest			true	"Login payload"
 //	@Success		200		{object}	dto.Response{data=string}	"Bearer JWT token"
-//	@Failure		400		{object}	dto.Response				"Invalid request body"
-//	@Failure		401		{object}	dto.Response				"Wrong email or password"
+//	@Failure		400		{object}	dto.Response				"Invalid or malformed request body"
+//	@Failure		401		{object}	dto.Response				"Incorrect email or password"
 //	@Router			/auth/login [post]
 func (a *AuthController) Login(ctx *gin.Context) {
 	var body dto.LoginRequest
@@ -105,13 +106,13 @@ func (a *AuthController) Login(ctx *gin.Context) {
 // Logout godoc
 //
 //	@Summary		Logout
-//	@Description	Revokes the current Bearer token by setting `is_revoked = true` in the tokens table. The token becomes invalid immediately on all subsequent requests — no need to wait for expiry.
+//	@Description	Revokes the current Bearer token by setting `is_revoked = true` in the tokens table. The token is invalidated immediately on all subsequent requests — no need to wait for JWT expiry.
 //	@Tags			Auth
 //	@Produce		json
-//	@Security		ApiKeyAuth
-//	@Success		200	{object}	dto.Response				"Logged out"
-//	@Failure		401	{object}	dto.Response				"Unauthorized or missing token"
-//	@Failure		500	{object}	dto.Response				"Internal server error"
+//	@Security		BearerAuth
+//	@Success		200	{object}	dto.Response	"Logged out successfully"
+//	@Failure		401	{object}	dto.Response	"Unauthorized or missing/invalid token"
+//	@Failure		500	{object}	dto.Response	"Internal server error"
 //	@Router			/auth/logout [post]
 func (a *AuthController) Logout(ctx *gin.Context) {
 	_, exists := ctx.Get("claims")
@@ -153,14 +154,14 @@ func (a *AuthController) Logout(ctx *gin.Context) {
 // GetPIN godoc
 //
 //	@Summary		Get PIN hash
-//	@Description	Returns the bcrypt-hashed PIN of the authenticated user. Use this to verify whether a PIN has already been set before prompting the user to create one.
+//	@Description	Returns the bcrypt-hashed PIN for the authenticated user. Use this to check whether a PIN has been set before prompting the user to create or enter one. Compare user input on the client using bcrypt.
 //	@Tags			Auth
 //	@Produce		json
-//	@Security		ApiKeyAuth
-//	@Success		200	{object}	dto.Response{data=string}	"Bcrypt PIN hash"
-//	@Failure		401	{object}	dto.Response				"Unauthorized"
-//	@Failure		404	{object}	dto.Response				"PIN not set for this user"
-//	@Failure		500	{object}	dto.Response
+//	@Security		BearerAuth
+//	@Success		200	{object}	dto.Response{data=string}	"Bcrypt-hashed PIN"
+//	@Failure		401	{object}	dto.Response				"Unauthorized or missing token"
+//	@Failure		404	{object}	dto.Response				"PIN not yet set for this user"
+//	@Failure		500	{object}	dto.Response				"Internal server error"
 //	@Router			/auth/pin [get]
 func (a *AuthController) GetPIN(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")

@@ -30,14 +30,14 @@ func NewProfileController(profileservice *service.ProfileService) *ProfileContro
 // GetProfile godoc
 //
 //	@Summary		Get profile
-//	@Description	Retrieve the authenticated user's profile: full_name, phone, and photo URL.
+//	@Description	Retrieve the authenticated user's profile fields: full_name, phone, and photo URL.
 //	@Tags			Profile
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Success		200	{object}	dto.Response{data=dto.ProfileResponse}	"Profile data"
-//	@Failure		401	{object}	dto.Response							"Unauthorized"
+//	@Failure		401	{object}	dto.Response							"Unauthorized or missing token"
 //	@Failure		404	{object}	dto.Response							"Profile not found"
-//	@Failure		500	{object}	dto.Response
+//	@Failure		500	{object}	dto.Response							"Internal server error"
 //	@Router			/profile/ [get]
 func (p *ProfileController) GetProfile(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
@@ -95,19 +95,19 @@ func (p *ProfileController) validateAndSavePhoto(ctx *gin.Context, photo *multip
 // EditProfile godoc
 //
 //	@Summary		Update profile
-//	@Description	Update one or more profile fields: full_name, phone, and/or photo. All fields are optional. Omit any field to leave it unchanged.
+//	@Description	Update one or more profile fields: full_name, phone, and/or photo. All fields are optional — omit any field to leave it unchanged. Accepts multipart/form-data.
 //	@Tags			Profile
 //	@Accept			mpfd
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Param			full_name	formData	string	false	"Display name"
 //	@Param			phone		formData	string	false	"Phone number in E.164 format (e.g. +628123456789)"
-//	@Param			photo		formData	file	false	"Profile photo — JPEG, PNG, or WebP, max 2 MB"
-//	@Success		200			{object}	dto.Response							"Profile updated"
-//	@Failure		400			{object}	dto.Response							"Invalid form data"
-//	@Failure		401			{object}	dto.Response							"Unauthorized"
-//	@Failure		422			{object}	dto.Response							"File too large or unsupported type"
-//	@Failure		500			{object}	dto.Response
+//	@Param			photo		formData	file	false	"Profile photo — JPEG, PNG, or WebP; max 2 MB"
+//	@Success		200			{object}	dto.Response							"Profile updated successfully"
+//	@Failure		400			{object}	dto.Response							"Invalid or malformed form data"
+//	@Failure		401			{object}	dto.Response							"Unauthorized or missing token"
+//	@Failure		422			{object}	dto.Response							"Photo exceeds 2 MB or has unsupported file type"
+//	@Failure		500			{object}	dto.Response							"Internal server error"
 //	@Router			/profile/ [post]
 func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
@@ -152,16 +152,16 @@ func (p *ProfileController) EditProfile(ctx *gin.Context) {
 // EditPin godoc
 //
 //	@Summary		Set / update PIN
-//	@Description	Store a new bcrypt-hashed 6-digit PIN for the authenticated user. The client must hash the raw PIN with bcrypt before sending. Any existing PIN is replaced.
+//	@Description	Store a new 6-digit PIN for the authenticated user. Send the PIN as a bcrypt hash (`pin_hash`). Any previously set PIN is replaced.
 //	@Tags			Profile
 //	@Accept			json
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Param			body	body		dto.SetPinRequest	true	"PIN payload (pin_hash = bcrypt hash of the 6-digit PIN)"
-//	@Success		200		{object}	dto.Response		"PIN updated"
-//	@Failure		400		{object}	dto.Response		"Invalid or missing payload"
-//	@Failure		401		{object}	dto.Response		"Unauthorized"
-//	@Failure		500		{object}	dto.Response
+//	@Success		200		{object}	dto.Response		"PIN updated successfully"
+//	@Failure		400		{object}	dto.Response		"Invalid or missing request body"
+//	@Failure		401		{object}	dto.Response		"Unauthorized or missing token"
+//	@Failure		500		{object}	dto.Response		"Internal server error"
 //	@Router			/profile/change/pin [post]
 func (p *ProfileController) EditPin(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
@@ -189,16 +189,16 @@ func (p *ProfileController) EditPin(ctx *gin.Context) {
 // EditPassword godoc
 //
 //	@Summary		Change password
-//	@Description	Verify the current password, then replace it with the new one. Both fields are required.
+//	@Description	Verifies the current password then replaces it with the new one. Both `old_password` and `password` are required.
 //	@Tags			Profile
 //	@Accept			json
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Param			body	body		dto.ChangePasswordRequest	true	"Password change payload"
-//	@Success		200		{object}	dto.Response				"Password updated"
-//	@Failure		400		{object}	dto.Response				"Invalid or missing payload"
-//	@Failure		401		{object}	dto.Response				"Unauthorized or wrong old password"
-//	@Failure		500		{object}	dto.Response
+//	@Success		200		{object}	dto.Response				"Password updated successfully"
+//	@Failure		400		{object}	dto.Response				"Invalid or missing request body"
+//	@Failure		401		{object}	dto.Response				"Unauthorized or incorrect current password"
+//	@Failure		500		{object}	dto.Response				"Internal server error"
 //	@Router			/profile/change/password [post]
 func (p *ProfileController) EditPassword(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
@@ -230,13 +230,13 @@ func (p *ProfileController) EditPassword(ctx *gin.Context) {
 // GetUserInfo godoc
 //
 //	@Summary		User info for app header
-//	@Description	Returns email, full_name, phone, photo, and current_balance (sum of all wallets). Intended for populating the persistent app header/navbar without a full dashboard call.
+//	@Description	Returns email, full_name, phone, photo, and current_balance (sum across all wallets). Intended for populating the persistent app header/navbar without a full dashboard call.
 //	@Tags			Profile
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Success		200	{object}	dto.Response{data=dto.UserInfoResponse}	"User info"
-//	@Failure		401	{object}	dto.Response							"Unauthorized"
-//	@Failure		500	{object}	dto.Response
+//	@Failure		401	{object}	dto.Response							"Unauthorized or missing token"
+//	@Failure		500	{object}	dto.Response							"Internal server error"
 //	@Router			/profile/me [get]
 func (p *ProfileController) GetUserInfo(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")

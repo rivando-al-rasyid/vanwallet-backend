@@ -79,13 +79,13 @@ func txToResponse(tx model.Transaction) dto.TransactionResponse {
 // GetSummary godoc
 //
 //	@Summary		Dashboard — financial summary
-//	@Description	Returns the authenticated user's total wallet balance, total income (TRANSFER_IN), total expense (EXPENSE + WITHDRAWAL + TRANSFER_OUT), and a list of all wallets with individual balances.
+//	@Description	Returns the authenticated user's total wallet balance, total income (TRANSFER_IN), total expense (EXPENSE + WITHDRAWAL + TRANSFER_OUT), and a list of all wallets with their individual balances.
 //	@Tags			Transaction
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Success		200	{object}	dto.Response{data=dto.SummaryResponse}	"Summary data"
-//	@Failure		401	{object}	dto.Response							"Unauthorized"
-//	@Failure		500	{object}	dto.Response
+//	@Failure		401	{object}	dto.Response							"Unauthorized or missing token"
+//	@Failure		500	{object}	dto.Response							"Internal server error"
 //	@Router			/transaction/summary [get]
 func (t *TransactionController) GetSummary(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
@@ -124,16 +124,16 @@ func (t *TransactionController) GetSummary(ctx *gin.Context) {
 // GetTransactionReport godoc
 //
 //	@Summary		Dashboard — graph data
-//	@Description	Returns chart data for the dashboard graph. Filter by type (income/expense/both) and date range (7days/30days). 7days returns daily buckets (Mon–Sun label). 30days returns weekly buckets (W## label).
+//	@Description	Returns chart data for the dashboard graph. Filter by type (income/expense/both) and date range (7days/30days). `7days` returns daily buckets labelled Mon–Sun; `30days` returns weekly buckets labelled W01, W02, etc.
 //	@Tags			Transaction
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Param			range	query		string	false	"Date range"	Enums(7days, 30days)		default(7days)
 //	@Param			type	query		string	false	"Data type"		Enums(income, expense, both)	default(both)
-//	@Success		200		{object}	dto.Response{data=dto.TransactionReportResponse}
-//	@Failure		400		{object}	dto.Response	"Invalid parameter"
-//	@Failure		401		{object}	dto.Response	"Unauthorized"
-//	@Failure		500		{object}	dto.Response
+//	@Success		200		{object}	dto.Response{data=dto.TransactionReportResponse}	"Chart data"
+//	@Failure		400		{object}	dto.Response										"Invalid query parameter"
+//	@Failure		401		{object}	dto.Response										"Unauthorized or missing token"
+//	@Failure		500		{object}	dto.Response										"Internal server error"
 //	@Router			/transaction/report [get]
 func (t *TransactionController) GetTransactionReport(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
@@ -189,17 +189,17 @@ func (t *TransactionController) GetTransactionReport(ctx *gin.Context) {
 // GetTransactions godoc
 //
 //	@Summary		List transactions
-//	@Description	Paginated list of transactions across all wallets. Filter by wallet_id to scope to one wallet.
+//	@Description	Returns a paginated list of transactions across all wallets. Optionally filter by `wallet_id` to scope results to a single wallet. `page` and `limit` default to 1 and 10 respectively; `limit` is capped at 100.
 //	@Tags			Transaction
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Param			wallet_id	query		string	false	"Filter by wallet UUID"
-//	@Param			page		query		int		false	"Page number"				default(1)
-//	@Param			limit		query		int		false	"Items per page (max 100)"	default(10)
-//	@Success		200			{object}	dto.Response{data=dto.TransactionListResponse}
-//	@Failure		400			{object}	dto.Response	"Invalid wallet_id"
-//	@Failure		401			{object}	dto.Response	"Unauthorized"
-//	@Failure		500			{object}	dto.Response
+//	@Param			page		query		int		false	"Page number (min 1)"			default(1)
+//	@Param			limit		query		int		false	"Items per page (1–100)"		default(10)
+//	@Success		200			{object}	dto.Response{data=dto.TransactionListResponse}	"Transaction list"
+//	@Failure		400			{object}	dto.Response									"Invalid wallet_id UUID"
+//	@Failure		401			{object}	dto.Response									"Unauthorized or missing token"
+//	@Failure		500			{object}	dto.Response									"Internal server error"
 //	@Router			/transaction/ [get]
 func (t *TransactionController) GetTransactions(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
@@ -254,15 +254,16 @@ func (t *TransactionController) GetTransactions(ctx *gin.Context) {
 // GetTransactionByID godoc
 //
 //	@Summary		Get transaction detail
-//	@Description	Fetch a single transaction by UUID. Only accessible if the transaction belongs to the authenticated user.
+//	@Description	Fetch a single transaction by UUID. Returns 404 if the transaction does not exist or does not belong to the authenticated user.
 //	@Tags			Transaction
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Param			id	path		string	true	"Transaction UUID"
-//	@Success		200	{object}	dto.Response{data=dto.TransactionResponse}
-//	@Failure		400	{object}	dto.Response	"Invalid UUID"
-//	@Failure		401	{object}	dto.Response	"Unauthorized"
-//	@Failure		404	{object}	dto.Response	"Not found"
+//	@Success		200	{object}	dto.Response{data=dto.TransactionResponse}	"Transaction detail"
+//	@Failure		400	{object}	dto.Response								"Invalid UUID format"
+//	@Failure		401	{object}	dto.Response								"Unauthorized or missing token"
+//	@Failure		404	{object}	dto.Response								"Transaction not found"
+//	@Failure		500	{object}	dto.Response								"Internal server error"
 //	@Router			/transaction/{id} [get]
 func (t *TransactionController) GetTransactionByID(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
@@ -289,16 +290,16 @@ func (t *TransactionController) GetTransactionByID(ctx *gin.Context) {
 // CreateTopup godoc
 //
 //	@Summary		Initiate a top-up
-//	@Description	Creates a PENDING top-up record. Wallet balance is NOT credited yet — call PATCH /transaction/topup/{id}/confirm to complete it.
+//	@Description	Creates a PENDING top-up record. The wallet balance is NOT credited yet. Call PATCH /transaction/topup/{id}/confirm to complete the top-up and credit the balance. No PIN required.
 //	@Tags			Transaction
 //	@Accept			json
 //	@Produce		json
-//	@Security		ApiKeyAuth
-//	@Param			body	body		dto.TopupRequest				true	"Top-up payload"
-//	@Success		201		{object}	dto.Response{data=dto.TopupResponse}
-//	@Failure		400		{object}	dto.Response	"Invalid payload"
-//	@Failure		401		{object}	dto.Response	"Unauthorized"
-//	@Failure		500		{object}	dto.Response
+//	@Security		BearerAuth
+//	@Param			body	body		dto.TopupRequest					true	"Top-up payload"
+//	@Success		201		{object}	dto.Response{data=dto.TopupResponse}	"Top-up initiated; status = PENDING"
+//	@Failure		400		{object}	dto.Response						"Invalid payload or wallet_id UUID"
+//	@Failure		401		{object}	dto.Response						"Unauthorized or missing token"
+//	@Failure		500		{object}	dto.Response						"Internal server error"
 //	@Router			/transaction/topup [post]
 func (t *TransactionController) CreateTopup(ctx *gin.Context) {
 	_, ok := claimsEmail(ctx)
@@ -357,15 +358,15 @@ func (t *TransactionController) CreateTopup(ctx *gin.Context) {
 // ConfirmTopup godoc
 //
 //	@Summary		Confirm a top-up
-//	@Description	Sets the top-up to SUCCESS and credits the wallet balance atomically. Only works on PENDING top-ups.
+//	@Description	Sets the top-up status to SUCCESS and atomically credits the wallet balance. Only works on PENDING top-ups; returns 404 if the top-up does not exist or has already been processed.
 //	@Tags			Transaction
 //	@Produce		json
-//	@Security		ApiKeyAuth
-//	@Param			id	path		string	true	"Topup UUID"
-//	@Success		200	{object}	dto.Response{data=dto.TopupResponse}
-//	@Failure		400	{object}	dto.Response	"Invalid UUID"
-//	@Failure		401	{object}	dto.Response	"Unauthorized"
-//	@Failure		404	{object}	dto.Response	"Topup not found or already processed"
+//	@Security		BearerAuth
+//	@Param			id	path		string	true	"Top-up UUID"
+//	@Success		200	{object}	dto.Response{data=dto.TopupResponse}	"Top-up confirmed; status = SUCCESS"
+//	@Failure		400	{object}	dto.Response						"Invalid UUID format"
+//	@Failure		401	{object}	dto.Response						"Unauthorized or missing token"
+//	@Failure		404	{object}	dto.Response						"Top-up not found or already processed"
 //	@Router			/transaction/topup/{id}/confirm [patch]
 func (t *TransactionController) ConfirmTopup(ctx *gin.Context) {
 	_, ok := claimsEmail(ctx)
@@ -408,17 +409,17 @@ func (t *TransactionController) ConfirmTopup(ctx *gin.Context) {
 // CreateWithdrawal godoc
 //
 //	@Summary		Withdraw to bank account
-//	@Description	Debits the wallet and records a WITHDRAWAL transaction atomically. Admin fee: Rp 6.500. PIN required.
+//	@Description	Debits the wallet and records a WITHDRAWAL transaction atomically. A fixed admin fee of Rp 6,500 is deducted in addition to the requested amount. PIN required.
 //	@Tags			Transaction
 //	@Accept			json
 //	@Produce		json
-//	@Security		ApiKeyAuth
-//	@Param			body	body		dto.WithdrawalRequest				true	"Withdrawal payload"
-//	@Success		201		{object}	dto.Response{data=dto.WithdrawalResponse}
-//	@Failure		400		{object}	dto.Response	"Invalid payload"
-//	@Failure		401		{object}	dto.Response	"Unauthorized or wrong PIN"
-//	@Failure		422		{object}	dto.Response	"Insufficient balance"
-//	@Failure		500		{object}	dto.Response
+//	@Security		BearerAuth
+//	@Param			body	body		dto.WithdrawalRequest					true	"Withdrawal payload"
+//	@Success		201		{object}	dto.Response{data=dto.WithdrawalResponse}	"Withdrawal submitted; status = PENDING"
+//	@Failure		400		{object}	dto.Response							"Invalid payload or wallet_id UUID"
+//	@Failure		401		{object}	dto.Response							"Unauthorized or incorrect PIN"
+//	@Failure		422		{object}	dto.Response							"Insufficient balance"
+//	@Failure		500		{object}	dto.Response							"Internal server error"
 //	@Router			/transaction/withdrawal [post]
 func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
@@ -481,17 +482,17 @@ func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 // CreateTransfer godoc
 //
 //	@Summary		Transfer funds between wallets
-//	@Description	Atomically debits sender and credits recipient. Creates TRANSFER_OUT and TRANSFER_IN entries linked by a transfer_code. PIN required.
+//	@Description	Atomically debits the sender wallet and credits the recipient wallet. Creates a TRANSFER_OUT entry on the sender and a TRANSFER_IN entry on the recipient, both linked by a shared transfer_code. PIN required.
 //	@Tags			Transaction
 //	@Accept			json
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Param			body	body		dto.TransferRequest					true	"Transfer payload"
-//	@Success		201		{object}	dto.Response{data=dto.TransferResponse}
-//	@Failure		400		{object}	dto.Response	"Invalid payload"
-//	@Failure		401		{object}	dto.Response	"Unauthorized or wrong PIN"
-//	@Failure		422		{object}	dto.Response	"Insufficient balance"
-//	@Failure		500		{object}	dto.Response
+//	@Success		201		{object}	dto.Response{data=dto.TransferResponse}	"Transfer completed"
+//	@Failure		400		{object}	dto.Response						"Invalid payload or wallet UUID"
+//	@Failure		401		{object}	dto.Response						"Unauthorized or incorrect PIN"
+//	@Failure		422		{object}	dto.Response						"Insufficient balance"
+//	@Failure		500		{object}	dto.Response						"Internal server error"
 //	@Router			/transaction/transfer [post]
 func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
@@ -558,17 +559,17 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 // CreateExpense godoc
 //
 //	@Summary		Record an expense
-//	@Description	Debits the wallet and records an EXPENSE transaction with optional category and merchant metadata. PIN required.
+//	@Description	Debits the specified wallet and records an EXPENSE transaction. Optional fields: category and merchant_name. PIN required.
 //	@Tags			Transaction
 //	@Accept			json
 //	@Produce		json
-//	@Security		ApiKeyAuth
-//	@Param			body	body		dto.ExpenseRequest				true	"Expense payload"
-//	@Success		201		{object}	dto.Response{data=dto.ExpenseResponse}
-//	@Failure		400		{object}	dto.Response	"Invalid payload"
-//	@Failure		401		{object}	dto.Response	"Unauthorized or wrong PIN"
-//	@Failure		422		{object}	dto.Response	"Insufficient balance"
-//	@Failure		500		{object}	dto.Response
+//	@Security		BearerAuth
+//	@Param			body	body		dto.ExpenseRequest					true	"Expense payload"
+//	@Success		201		{object}	dto.Response{data=dto.ExpenseResponse}	"Expense recorded"
+//	@Failure		400		{object}	dto.Response						"Invalid payload or wallet_id UUID"
+//	@Failure		401		{object}	dto.Response						"Unauthorized or incorrect PIN"
+//	@Failure		422		{object}	dto.Response						"Insufficient balance"
+//	@Failure		500		{object}	dto.Response						"Internal server error"
 //	@Router			/transaction/expense [post]
 func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
@@ -638,17 +639,17 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 // FindReceivers godoc
 //
 //	@Summary		Search transfer receivers
-//	@Description	Search users by full name or phone number (case-insensitive, partial match). Excludes the calling user. Only users who have set their full_name or phone are searchable.
+//	@Description	Search users by full name or phone number (case-insensitive partial match). Excludes the calling user. Only users who have set their full_name or phone are searchable. `q` must be at least 2 characters. `limit` is capped at 50.
 //	@Tags			Transaction
 //	@Produce		json
-//	@Security		ApiKeyAuth
-//	@Param			q		query		string	true	"Search query (full name or phone)"
-//	@Param			page	query		int		false	"Page number"				default(1)
-//	@Param			limit	query		int		false	"Items per page (max 50)"	default(10)
-//	@Success		200		{object}	dto.Response{data=dto.ReceiverListResponse}
-//	@Failure		400		{object}	dto.Response	"Query too short"
-//	@Failure		401		{object}	dto.Response	"Unauthorized"
-//	@Failure		500		{object}	dto.Response
+//	@Security		BearerAuth
+//	@Param			q		query		string	true	"Search query — full name or phone number (min 2 chars)"
+//	@Param			page	query		int		false	"Page number (min 1)"		default(1)
+//	@Param			limit	query		int		false	"Items per page (1–50)"		default(10)
+//	@Success		200		{object}	dto.Response{data=dto.ReceiverListResponse}	"Matching receivers"
+//	@Failure		400		{object}	dto.Response								"Query too short (< 2 characters)"
+//	@Failure		401		{object}	dto.Response								"Unauthorized or missing token"
+//	@Failure		500		{object}	dto.Response								"Internal server error"
 //	@Router			/transaction/receiver [get]
 func (t *TransactionController) FindReceivers(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
