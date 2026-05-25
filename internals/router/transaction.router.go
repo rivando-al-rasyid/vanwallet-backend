@@ -3,18 +3,19 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/controller"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/middleware"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/repository"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/service"
 )
 
-func TransactionRouter(router *gin.Engine, db *pgxpool.Pool) {
+func TransactionRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) {
 	txRepo := repository.NewTransactionRepo(db)
 	txServ := service.NewTransactionService(txRepo)
 
 	authRepo := repository.NewAuthRepo(db)
-	authServ := service.NewAuthService(authRepo)
+	authServ := service.NewAuthService(authRepo, rdb)
 
 	txCont := controller.NewTransactionController(txServ, authServ)
 

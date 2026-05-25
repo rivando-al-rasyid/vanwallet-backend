@@ -115,7 +115,7 @@ func (a *AuthController) Login(ctx *gin.Context) {
 //	@Failure		500	{object}	dto.Response	"Internal server error"
 //	@Router			/auth/logout [post]
 func (a *AuthController) Logout(ctx *gin.Context) {
-	_, exists := ctx.Get("claims")
+	claimsRaw, exists := ctx.Get("claims")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, dto.Response{
 			Message: "Unauthorized",
@@ -124,6 +124,7 @@ func (a *AuthController) Logout(ctx *gin.Context) {
 		})
 		return
 	}
+	email := claimsRaw.(pkg.Claims).Email
 
 	rawToken, exists := ctx.Get("raw_token")
 	if !exists {
@@ -135,7 +136,7 @@ func (a *AuthController) Logout(ctx *gin.Context) {
 		return
 	}
 
-	if err := a.authservice.Logout(ctx.Request.Context(), rawToken.(string)); err != nil {
+	if err := a.authservice.Logout(ctx.Request.Context(), rawToken.(string), email); err != nil {
 		log.Printf("[AuthController.Logout] service error: %v\n", err)
 		ctx.JSON(http.StatusInternalServerError, dto.Response{
 			Message: "Logout failed",

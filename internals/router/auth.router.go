@@ -3,15 +3,16 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/controller"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/middleware"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/repository"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/service"
 )
 
-func AuthRouter(router *gin.Engine, db *pgxpool.Pool) {
+func AuthRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) {
 	authRepo := repository.NewAuthRepo(db)
-	authServ := service.NewAuthService(authRepo)
+	authServ := service.NewAuthService(authRepo, rdb)
 	authCont := controller.NewAuthController(authServ)
 
 	auth := router.Group("/auth")
