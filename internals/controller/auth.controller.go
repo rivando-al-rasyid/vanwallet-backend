@@ -193,7 +193,14 @@ func (a *AuthController) GetPIN(ctx *gin.Context) {
 		})
 		return
 	}
-
+	if len(*pin.PinHash) == 0 {
+		ctx.JSON(http.StatusInternalServerError, dto.Response{
+			Message: "Failed to fetch PIN",
+			Success: false,
+			Error:   "Internal server error",
+		})
+		return
+	}
 	ctx.JSON(http.StatusOK, dto.Response{
 		Data:    pin.PinHash,
 		Message: "Pin successfully retrieved",

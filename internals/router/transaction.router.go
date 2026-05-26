@@ -23,12 +23,10 @@ func TransactionRouter(router *gin.Engine, db *pgxpool.Pool) {
 	g.GET("/", txCont.GetTransactions)
 	g.GET("/:id", txCont.GetTransactionByID)
 
-	write := g.Group("", middleware.RequirePin(db))
-	{
-		write.POST("/topup", txCont.CreateTopup)
-		write.PATCH("/topup/:id/confirm", txCont.ConfirmTopup)
-		write.POST("/withdrawal", txCont.CreateWithdrawal)
-		write.POST("/transfer", txCont.CreateTransfer)
-		write.POST("/expense", txCont.CreateExpense)
-	}
+	g.POST("/topup", txCont.CreateTopup)
+	g.PATCH("/topup/:id/confirm", txCont.ConfirmTopup)
+	g.POST("/withdrawal", txCont.CreateWithdrawal)
+	g.POST("/transfer", txCont.CreateTransfer)
+	g.POST("/expense", txCont.CreateExpense)
+
 }

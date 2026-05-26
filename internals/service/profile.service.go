@@ -42,7 +42,10 @@ func (s *ProfileService) EditProfile(ctx context.Context, email string, updates 
 }
 
 func (s *ProfileService) EditPin(ctx context.Context, email string, newPin string) (model.UserPin, error) {
-	return s.repo.EditPin(ctx, email, newPin)
+	var hc pkg.HashConfig
+	hc.UseRecommended()
+	hashedPin := hc.GenHash(newPin)
+	return s.repo.EditPin(ctx, email, hashedPin)
 }
 
 func (s *ProfileService) EditPassword(ctx context.Context, email, oldPassword, newPassword string) (model.User, error) {
