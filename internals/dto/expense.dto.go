@@ -2,12 +2,12 @@ package dto
 
 // ExpenseRequest is the payload for recording an expense.
 type ExpenseRequest struct {
-	WalletID     string  `json:"wallet_id"     validate:"required,uuid4"`
-	Amount       int64   `json:"amount"        validate:"required,gt=0"`
-	AdminFee     int64   `json:"admin_fee"     validate:"omitempty,gte=0"`
-	Category     string  `json:"category"      validate:"omitempty,max=50"`
-	MerchantName string  `json:"merchant_name" validate:"omitempty,max=100"`
-	Note         *string `json:"note"          validate:"omitempty,max=255"`
+	WalletID     string  `json:"wallet_id"     binding:"required,uuid4"`
+	Amount       int64   `json:"amount"        binding:"required,gt=0"`
+	AdminFee     int64   `json:"admin_fee"     binding:"omitempty,gte=0"`
+	Category     string  `json:"category"      binding:"omitempty,max=50"`
+	MerchantName string  `json:"merchant_name" binding:"omitempty,max=100"`
+	Note         *string `json:"note"          binding:"omitempty,max=255"`
 }
 
 // ExpenseResponse is returned after an expense is recorded.

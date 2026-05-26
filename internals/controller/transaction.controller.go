@@ -460,7 +460,7 @@ func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			body	body		dto.TransferRequest					true	"Transfer payload"
-//	@Success		201		{object}	dto.Response{data=dto.TransferResponse}	"Transfer completed"
+//	@Success		201		{object}	dto.Response						"Transfer completed"
 //	@Failure		400		{object}	dto.Response						"Invalid payload or wallet UUID"
 //	@Failure		401		{object}	dto.Response						"Unauthorized or incorrect PIN"
 //	@Failure		422		{object}	dto.Response						"Insufficient balance"
@@ -496,7 +496,7 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 	}
 
 	const transferAdminFee int64 = 0
-	transfer, senderTx, recipientTx, err := t.transactionService.CreateTransfer(
+	transfer, _, _, err := t.transactionService.CreateTransfer(
 		ctx.Request.Context(), senderWalletID, recipientWalletID, body.Amount, transferAdminFee, note,
 	)
 	if err != nil {
@@ -508,17 +508,8 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 		return
 	}
 
-	transferCode := ""
-	if transfer.TransferCode != nil {
-		transferCode = *transfer.TransferCode
-	}
-
 	ctx.JSON(http.StatusCreated, dto.Response{
-		Data: dto.TransferResponse{
-			TransferCode:         transferCode,
-			SenderTransaction:    txToResponse(senderTx),
-			RecipientTransaction: txToResponse(recipientTx),
-		},
+		Data:    transfer,
 		Message: "Transfer completed successfully",
 		Success: true,
 	})

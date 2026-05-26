@@ -25,14 +25,39 @@
   <body>
     <h1>API Router Tester</h1>
 
-    <button onclick="testAuthEndpoint()">Test Protected Route</button>
+    <button onclick="testGetProfile()">Test Protected Route</button>
+    <button onclick="testLogin()">testLogin</button>
 
     <div id="output" style="margin-top: 20px; white-space: pre-wrap"></div>
 
     <script>
       const API_URL = "http://localhost:8080"; // Change to match your backend
+      async function testLogin(
+        data = { email: "user@example.com", password: "P@ssw0rd123" },
+      ) {
+        try {
+          const response = await fetch(`${API_URL}/auth/user`, {
+            method: "POST", // Specifies the request type
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(data), // Data must be stringified for JSON
+          });
 
-      async function testAuthEndpoint() {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const result = await response.json();
+          console.log("Success:", result);
+          return result;
+        } catch (error) {
+          // This catches network failures AND errors thrown manually above
+          console.error("Error during fetch:", error);
+        }
+      }
+
+      async function testGetProfile() {
         const output = document.getElementById("output");
         output.textContent = "Testing protected endpoint...";
 
