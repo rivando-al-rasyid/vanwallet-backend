@@ -7,7 +7,6 @@ type WithdrawalRequest struct {
 	BankName      string `json:"bank_name"      validate:"required,min=2,max=50"`
 	AccountNumber string `json:"account_number" validate:"required,min=6,max=20"`
 	AccountHolder string `json:"account_holder" validate:"required,min=2,max=100"`
-	Pin           string `json:"pin"            validate:"required,len=6,numeric"`
 }
 
 // WithdrawalResponse is returned after a withdrawal is submitted.

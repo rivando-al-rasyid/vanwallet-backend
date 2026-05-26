@@ -16,5 +16,5 @@ func MainRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) {
 	router.Use(middleware.CORSMiddleware)
 	AuthRouter(router, db, rdb)
 	ProfileRouter(router, db)
-	TransactionRouter(router, db, rdb)
+	TransactionRouter(router, db)
 }

@@ -42,7 +42,6 @@ func (a *AuthService) Register(ctx context.Context, user dto.RegisterRequest) (d
 	return dto.UserResponse{ID: result.ID, Email: result.Email}, nil
 }
 
-// Login authenticates the user and persists the issued JWT in the tokens table.
 func (a *AuthService) Login(ctx context.Context, user dto.LoginRequest) (string, error) {
 	login, err := a.getOrFetchUser(ctx, user.Email)
 	if err != nil {

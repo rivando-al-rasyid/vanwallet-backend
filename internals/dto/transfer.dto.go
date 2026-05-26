@@ -6,7 +6,6 @@ type TransferRequest struct {
 	RecipientWalletID string `json:"recipient_wallet_id" validate:"required,uuid4"`
 	Amount            int64  `json:"amount"              validate:"required,gt=0"`
 	Note              string `json:"note"                validate:"omitempty,max=255"`
-	Pin               string `json:"pin"                 validate:"required,len=6,numeric"`
 }
 
 // TransferResponse is returned after a transfer is completed.

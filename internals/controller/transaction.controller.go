@@ -14,13 +14,11 @@ import (
 
 type TransactionController struct {
 	transactionService *service.TransactionService
-	authService        *service.AuthService
 }
 
-func NewTransactionController(transactionService *service.TransactionService, authService *service.AuthService) *TransactionController {
+func NewTransactionController(transactionService *service.TransactionService) *TransactionController {
 	return &TransactionController{
 		transactionService: transactionService,
-		authService:        authService,
 	}
 }
 
@@ -30,28 +28,6 @@ func claimsEmail(ctx *gin.Context) (string, bool) {
 		return "", false
 	}
 	return c.(pkg.Claims).Email, true
-}
-
-func (t *TransactionController) verifyPin(ctx *gin.Context, email, pin string) bool {
-	userPin, err := t.authService.GetUserPin(ctx.Request.Context(), email)
-	if err != nil || userPin.PinHash == nil {
-		ctx.JSON(http.StatusUnauthorized, dto.Response{
-			Message: "PIN verification failed",
-			Success: false,
-			Error:   "PIN not set",
-		})
-		return false
-	}
-	var hc pkg.HashConfig
-	if err := hc.Compare(pin, *userPin.PinHash); err != nil {
-		ctx.JSON(http.StatusUnauthorized, dto.Response{
-			Message: "PIN verification failed",
-			Success: false,
-			Error:   "Invalid PIN",
-		})
-		return false
-	}
-	return true
 }
 
 func txToResponse(tx model.Transaction) dto.TransactionResponse {
@@ -422,7 +398,7 @@ func (t *TransactionController) ConfirmTopup(ctx *gin.Context) {
 //	@Failure		500		{object}	dto.Response							"Internal server error"
 //	@Router			/transaction/withdrawal [post]
 func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
-	email, ok := claimsEmail(ctx)
+	_, ok := claimsEmail(ctx)
 	if !ok {
 		ctx.JSON(http.StatusUnauthorized, dto.Response{Message: "Unauthorized", Success: false, Error: "Missing claims"})
 		return
@@ -431,10 +407,6 @@ func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 	var body dto.WithdrawalRequest
 	if err := ctx.ShouldBindJSON(&body); err != nil {
 		ctx.JSON(http.StatusBadRequest, dto.Response{Message: "Invalid request body", Success: false, Error: err.Error()})
-		return
-	}
-
-	if !t.verifyPin(ctx, email, body.Pin) {
 		return
 	}
 
@@ -495,7 +467,7 @@ func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 //	@Failure		500		{object}	dto.Response						"Internal server error"
 //	@Router			/transaction/transfer [post]
 func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
-	email, ok := claimsEmail(ctx)
+	_, ok := claimsEmail(ctx)
 	if !ok {
 		ctx.JSON(http.StatusUnauthorized, dto.Response{Message: "Unauthorized", Success: false, Error: "Missing claims"})
 		return
@@ -504,10 +476,6 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 	var body dto.TransferRequest
 	if err := ctx.ShouldBindJSON(&body); err != nil {
 		ctx.JSON(http.StatusBadRequest, dto.Response{Message: "Invalid request body", Success: false, Error: err.Error()})
-		return
-	}
-
-	if !t.verifyPin(ctx, email, body.Pin) {
 		return
 	}
 
@@ -572,7 +540,7 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 //	@Failure		500		{object}	dto.Response						"Internal server error"
 //	@Router			/transaction/expense [post]
 func (t *TransactionController) CreateExpense(ctx *gin.Context) {
-	email, ok := claimsEmail(ctx)
+	_, ok := claimsEmail(ctx)
 	if !ok {
 		ctx.JSON(http.StatusUnauthorized, dto.Response{Message: "Unauthorized", Success: false, Error: "Missing claims"})
 		return
@@ -581,10 +549,6 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 	var body dto.ExpenseRequest
 	if err := ctx.ShouldBindJSON(&body); err != nil {
 		ctx.JSON(http.StatusBadRequest, dto.Response{Message: "Invalid request body", Success: false, Error: err.Error()})
-		return
-	}
-
-	if !t.verifyPin(ctx, email, body.Pin) {
 		return
 	}
 

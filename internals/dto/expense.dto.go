@@ -8,7 +8,6 @@ type ExpenseRequest struct {
 	Category     string  `json:"category"      validate:"omitempty,max=50"`
 	MerchantName string  `json:"merchant_name" validate:"omitempty,max=100"`
 	Note         *string `json:"note"          validate:"omitempty,max=255"`
-	Pin          string  `json:"pin"           validate:"required,len=6,numeric"`
 }
 
 // ExpenseResponse is returned after an expense is recorded.
