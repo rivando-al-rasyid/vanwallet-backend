@@ -1,10 +1,12 @@
 package dto
 
 // TopupRequest is the payload for initiating a wallet top-up.
+// Pin is verified server-side before the record is created.
 type TopupRequest struct {
 	WalletID      string `json:"wallet_id"      binding:"required,uuid4"`
 	Amount        int64  `json:"amount"         binding:"required,gt=0"`
 	PaymentMethod string `json:"payment_method" binding:"required,oneof=BRI BCA DANA GOPAY OVO"`
+	Pin           string `json:"pin"            binding:"required,len=6"`
 }
 
 // TopupResponse is returned after a top-up is initiated.

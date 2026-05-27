@@ -8,10 +8,12 @@ import (
 )
 
 type TransactionRepository interface {
+	VerifyPIN(ctx context.Context, email, rawPin string) error
 	GetSummary(ctx context.Context, email string) (model.TransactionSummary, error)
 	GetTransactionReport(ctx context.Context, email, rangeParam, typeFilter string) ([]model.ChartPoint, error)
 	GetTransactionsByWallet(ctx context.Context, email string, walletID uuid.UUID, page, limit int) ([]model.Transaction, int, error)
 	GetAllTransactions(ctx context.Context, email string, page, limit int) ([]model.Transaction, int, error)
+	GetAllHistory(ctx context.Context, email string, page, limit int) ([]model.HistoryItem, int, error)
 	GetTransactionByID(ctx context.Context, email string, transactionID uuid.UUID) (model.Transaction, error)
 	CreateTopup(ctx context.Context, req model.Topup) (model.Topup, error)
 	ConfirmTopup(ctx context.Context, topupID uuid.UUID) (model.Topup, error)
@@ -21,19 +23,21 @@ type TransactionRepository interface {
 	SearchReceivers(ctx context.Context, callerEmail, query string, page, limit int) ([]model.ReceiverResult, int, error)
 }
 
-type TransactionService struct {
-	repo TransactionRepository
-}
+type TransactionService struct{ repo TransactionRepository }
 
 func NewTransactionService(repo TransactionRepository) *TransactionService {
 	return &TransactionService{repo: repo}
+}
+
+// VerifyPIN checks the stored argon2 PIN hash against rawPin before committing any sensitive operation.
+func (s *TransactionService) VerifyPIN(ctx context.Context, email, rawPin string) error {
+	return s.repo.VerifyPIN(ctx, email, rawPin)
 }
 
 func (s *TransactionService) GetSummary(ctx context.Context, email string) (model.TransactionSummary, error) {
 	return s.repo.GetSummary(ctx, email)
 }
 
-// GetTransactionReport now accepts typeFilter: "income" | "expense" | "both"
 func (s *TransactionService) GetTransactionReport(ctx context.Context, email, rangeParam, typeFilter string) ([]model.ChartPoint, error) {
 	return s.repo.GetTransactionReport(ctx, email, rangeParam, typeFilter)
 }
@@ -44,6 +48,11 @@ func (s *TransactionService) GetTransactionsByWallet(ctx context.Context, email 
 
 func (s *TransactionService) GetAllTransactions(ctx context.Context, email string, page, limit int) ([]model.Transaction, int, error) {
 	return s.repo.GetAllTransactions(ctx, email, page, limit)
+}
+
+// GetAllHistory returns unified history: ledger transactions + topups, sorted newest first.
+func (s *TransactionService) GetAllHistory(ctx context.Context, email string, page, limit int) ([]model.HistoryItem, int, error) {
+	return s.repo.GetAllHistory(ctx, email, page, limit)
 }
 
 func (s *TransactionService) GetTransactionByID(ctx context.Context, email string, transactionID uuid.UUID) (model.Transaction, error) {
