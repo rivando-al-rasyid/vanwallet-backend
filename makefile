@@ -1,6 +1,7 @@
 include ./.env
 
 MIGRATION_PATH=database/migrations
+SEED_FILE=database/seed.sql
 DATABASE_URL=postgresql://$(DB_USER):$(DB_PASS)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable
 
 migrate-create:
@@ -14,6 +15,14 @@ migrate-down:
 
 migrate-force:
 	@migrate -database $(DATABASE_URL) -path $(MIGRATION_PATH) force $(VERSION)
+
+seed:
+	@PGPASSWORD=$(DB_PASS) psql -h $(DB_HOST) -p $(DB_PORT) -U $(DB_USER) -d $(DB_NAME) -f $(SEED_FILE)
+
+seed-reset:
+	@PGPASSWORD=$(DB_PASS) psql -h $(DB_HOST) -p $(DB_PORT) -U $(DB_USER) -d $(DB_NAME) -c \
+		"TRUNCATE TABLE withdrawals, expenses, transfers, transactions, topups, wallets, user_pins, favorites, profiles, users RESTART IDENTITY CASCADE;"
+	@$(MAKE) seed
 
 print-db-url:
 	@echo $(DATABASE_URL)

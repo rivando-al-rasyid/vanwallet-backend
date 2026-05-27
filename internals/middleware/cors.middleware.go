@@ -10,7 +10,7 @@ import (
 
 func CORSMiddleware(ctx *gin.Context) {
 	// Tambahkan localhost ke dalam daftar origin yang diizinkan
-	allowedOrigin := []string{"http://127.0.0.1:5500", "http://localhost:5500"}
+	allowedOrigin := []string{"http://127.0.0.1:5500", "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5500"}
 	currentOrigin := ctx.GetHeader("Origin")
 
 	if slices.Contains(allowedOrigin, currentOrigin) {
