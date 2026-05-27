@@ -3,6 +3,7 @@ package controller
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/dto"
@@ -18,160 +19,75 @@ func NewAuthController(authservice *service.AuthService) *AuthController {
 	return &AuthController{authservice: authservice}
 }
 
-// Register godoc
-//
-//	@Summary		Register a new user
-//	@Description	Create a new account with email and password. Automatically creates a linked profile, PIN slot, and default wallet in a single atomic transaction.
-//	@Tags			Auth
-//	@Accept			json
-//	@Produce		json
-//	@Param			body	body		dto.RegisterRequest					true	"Register payload"
-//	@Success		201		{object}	dto.Response{data=dto.UserResponse}	"User created"
-//	@Failure		400		{object}	dto.Response						"Invalid or malformed request body"
-//	@Failure		409		{object}	dto.Response						"Email already registered"
-//	@Failure		500		{object}	dto.Response						"Internal server error"
-//	@Router			/auth/register [post]
 func (a *AuthController) Register(ctx *gin.Context) {
 	var body dto.RegisterRequest
 	if err := ctx.ShouldBindJSON(&body); err != nil {
 		log.Printf("[AuthController.Register] bind error: %v\n", err)
-		ctx.JSON(http.StatusBadRequest, dto.Response{
-			Message: "Invalid request payload",
-			Success: false,
-			Error:   "Please ensure your input matches the required format",
-		})
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request payload", "Please ensure your input matches the required format"))
 		return
 	}
 
 	res, err := a.authservice.Register(ctx.Request.Context(), body)
 	if err != nil {
 		log.Printf("[AuthController.Register] service error: %v\n", err)
-		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Registration failed",
-			Success: false,
-			Error:   "Email already exists",
-		})
+		status := http.StatusInternalServerError
+		errDetail := "Internal server error"
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate") || strings.Contains(strings.ToLower(err.Error()), "unique") {
+			status = http.StatusConflict
+			errDetail = "Email already exists"
+		}
+		ctx.JSON(status, dto.NewError("Registration failed", errDetail))
 		return
 	}
 
-	ctx.JSON(http.StatusCreated, dto.Response{
-		Data:    res,
-		Message: "User successfully registered",
-		Success: true,
-	})
+	ctx.JSON(http.StatusCreated, dto.NewSuccess("User successfully registered", res))
 }
 
-// Login godoc
-//
-//	@Summary		Login
-//	@Description	Authenticate with email and password. Returns a signed JWT valid for 24 hours. The token is persisted in the `tokens` table and can be invalidated immediately via POST /auth/logout.
-//	@Tags			Auth
-//	@Accept			json
-//	@Produce		json
-//	@Param			body	body		dto.LoginRequest			true	"Login payload"
-//	@Success		200		{object}	dto.Response{data=string}	"Bearer JWT token"
-//	@Failure		400		{object}	dto.Response				"Invalid or malformed request body"
-//	@Failure		401		{object}	dto.Response				"Incorrect email or password"
-//	@Router			/auth/login [post]
 func (a *AuthController) Login(ctx *gin.Context) {
 	var body dto.LoginRequest
 	if err := ctx.ShouldBindJSON(&body); err != nil {
 		log.Printf("[AuthController.Login] bind error: %v\n", err)
-		ctx.JSON(http.StatusBadRequest, dto.Response{
-			Message: "Invalid request payload",
-			Success: false,
-			Error:   "Please ensure your input matches the required format",
-		})
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request payload", "Please ensure your input matches the required format"))
 		return
 	}
 
 	token, err := a.authservice.Login(ctx.Request.Context(), body)
 	if err != nil {
 		log.Printf("[AuthController.Login] service error: %v\n", err)
-		ctx.JSON(http.StatusUnauthorized, dto.Response{
-			Message: "Login failed",
-			Success: false,
-			Error:   "wrong Email Or Password",
-		})
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Login failed", "Incorrect email or password"))
 		return
 	}
 
-	ctx.JSON(http.StatusOK, dto.Response{
-		Data:    token,
-		Message: "Login successful",
-		Success: true,
-	})
+	ctx.JSON(http.StatusOK, dto.NewSuccess("Login successful", token))
 }
 
-// Logout godoc
-//
-//	@Summary		Logout
-//	@Description	Revokes the current Bearer token by setting `is_revoked = true` in the tokens table. The token is invalidated immediately on all subsequent requests — no need to wait for JWT expiry.
-//	@Tags			Auth
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Success		200	{object}	dto.Response	"Logged out successfully"
-//	@Failure		401	{object}	dto.Response	"Unauthorized or missing/invalid token"
-//	@Failure		500	{object}	dto.Response	"Internal server error"
-//	@Router			/auth/logout [post]
 func (a *AuthController) Logout(ctx *gin.Context) {
 	claimsRaw, exists := ctx.Get("claims")
 	if !exists {
-		ctx.JSON(http.StatusUnauthorized, dto.Response{
-			Message: "Unauthorized",
-			Success: false,
-			Error:   "Missing claims",
-		})
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
 		return
 	}
 	email := claimsRaw.(pkg.Claims).Email
 
 	rawToken, exists := ctx.Get("raw_token")
 	if !exists {
-		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Logout failed",
-			Success: false,
-			Error:   "raw token not found in context",
-		})
+		ctx.JSON(http.StatusInternalServerError, dto.NewError("Logout failed", "raw token not found in context"))
 		return
 	}
 
 	if err := a.authservice.Logout(ctx.Request.Context(), rawToken.(string), email); err != nil {
 		log.Printf("[AuthController.Logout] service error: %v\n", err)
-		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Logout failed",
-			Success: false,
-			Error:   "Internal server error",
-		})
+		ctx.JSON(http.StatusInternalServerError, dto.NewError("Logout failed", "Internal server error"))
 		return
 	}
 
-	ctx.JSON(http.StatusOK, dto.Response{
-		Message: "Logged out successfully",
-		Success: true,
-	})
+	ctx.JSON(http.StatusOK, dto.NewSuccessNoData("Logged out successfully"))
 }
 
-// GetPIN godoc
-//
-//	@Summary		Get PIN hash
-//	@Description	Returns the bcrypt-hashed PIN for the authenticated user. Use this to check whether a PIN has been set before prompting the user to create or enter one. Compare user input on the client using bcrypt.
-//	@Tags			Auth
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Success		200	{object}	dto.Response{data=string}	"Bcrypt-hashed PIN"
-//	@Failure		401	{object}	dto.Response				"Unauthorized or missing token"
-//	@Failure		404	{object}	dto.Response				"PIN not yet set for this user"
-//	@Failure		500	{object}	dto.Response				"Internal server error"
-//	@Router			/auth/pin [get]
 func (a *AuthController) GetPIN(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
-		ctx.JSON(http.StatusUnauthorized, dto.Response{
-			Message: "Unauthorized",
-			Success: false,
-			Error:   "Missing claims",
-		})
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
 		return
 	}
 
@@ -179,31 +95,37 @@ func (a *AuthController) GetPIN(ctx *gin.Context) {
 	pin, err := a.authservice.GetUserPin(ctx.Request.Context(), email)
 	if err != nil {
 		if err.Error() == "user pin not found" {
-			ctx.JSON(http.StatusNotFound, dto.Response{
-				Message: "Failed to fetch PIN",
-				Success: false,
-				Error:   "Data tidak ditemukan",
-			})
+			ctx.JSON(http.StatusNotFound, dto.NewError("Failed to fetch PIN", "PIN not set for this user"))
 			return
 		}
-		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Failed to fetch PIN",
-			Success: false,
-			Error:   "Internal server error",
-		})
+		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to fetch PIN", "Internal server error"))
 		return
 	}
-	if len(*pin.PinHash) == 0 {
-		ctx.JSON(http.StatusInternalServerError, dto.Response{
-			Message: "Failed to fetch PIN",
-			Success: false,
-			Error:   "Internal server error",
-		})
+	if pin.PinHash == nil || len(*pin.PinHash) == 0 {
+		ctx.JSON(http.StatusNotFound, dto.NewError("Failed to fetch PIN", "PIN not set for this user"))
 		return
 	}
-	ctx.JSON(http.StatusOK, dto.Response{
-		Data:    pin.PinHash,
-		Message: "Pin successfully retrieved",
-		Success: true,
-	})
+	ctx.JSON(http.StatusOK, dto.NewSuccess("PIN successfully retrieved", pin.PinHash))
+}
+
+func (a *AuthController) VerifyPIN(ctx *gin.Context) {
+	claims, exists := ctx.Get("claims")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
+		return
+	}
+	email := claims.(pkg.Claims).Email
+
+	var body dto.VerifyPinRequest
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err.Error()))
+		return
+	}
+
+	if err := a.authservice.VerifyPin(ctx.Request.Context(), email, body.Pin); err != nil {
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Invalid PIN", err.Error()))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, dto.NewSuccessNoData("PIN verified successfully"))
 }

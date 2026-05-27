@@ -23,62 +23,36 @@ func VerifyTokenWithDB(db *pgxpool.Pool) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		bearerToken := ctx.GetHeader("Authorization")
 		if bearerToken == "" {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.Response{
-				Message: "Unauthorized",
-				Success: false,
-				Error:   "Missing Authorization header",
-			})
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing Authorization header"))
 			return
 		}
 
 		parts := strings.Split(bearerToken, " ")
 		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.Response{
-				Message: "Unauthorized",
-				Success: false,
-				Error:   "Invalid token format, use: Bearer <token>",
-			})
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Invalid token format, use: Bearer <token>"))
 			return
 		}
 		rawToken := parts[1]
 
-		// 1. Verify JWT signature + claims
 		var claims pkg.Claims
 		if err := claims.VerifyJWT(rawToken); err != nil {
 			log.Println("[VerifyToken] JWT error:", err)
 			if errors.Is(err, jwt.ErrTokenInvalidIssuer) || errors.Is(err, jwt.ErrTokenExpired) {
-				ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.Response{
-					Message: "Unauthorized, please login again",
-					Success: false,
-					Error:   err.Error(),
-				})
+				ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewError("Unauthorized, please login again", err.Error()))
 				return
 			}
-			ctx.AbortWithStatusJSON(http.StatusInternalServerError, dto.Response{
-				Message: "Error",
-				Success: false,
-				Error:   "Internal Server Error",
-			})
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, dto.NewError("Error", "Internal server error"))
 			return
 		}
 
-		// 2. Check tokens table — must be active (not revoked, not expired)
 		valid, err := authRepo.IsTokenValid(context.Background(), rawToken)
 		if err != nil {
 			log.Println("[VerifyToken] DB token check error:", err)
-			ctx.AbortWithStatusJSON(http.StatusInternalServerError, dto.Response{
-				Message: "Error",
-				Success: false,
-				Error:   "Internal Server Error",
-			})
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, dto.NewError("Error", "Internal server error"))
 			return
 		}
 		if !valid {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.Response{
-				Message: "Token has been revoked or expired, please login again",
-				Success: false,
-				Error:   "Token invalid",
-			})
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewError("Token has been revoked or expired, please login again", "Token invalid"))
 			return
 		}
 

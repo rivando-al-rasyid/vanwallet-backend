@@ -58,7 +58,6 @@ func (a *AuthService) Login(ctx context.Context, user dto.LoginRequest) (string,
 	if err != nil {
 		return "", err
 	}
-
 	expiresAt := time.Now().Add(pkg.AccessTokenExpiry)
 	if err := a.authRepo.SaveToken(
 		ctx,
@@ -115,4 +114,20 @@ func (a *AuthService) IsTokenValid(ctx context.Context, rawToken string) (bool, 
 
 func (a *AuthService) GetUserPin(ctx context.Context, email string) (model.UserPin, error) {
 	return a.authRepo.GetUserPin(ctx, email)
+}
+
+func (a *AuthService) VerifyPin(ctx context.Context, email, rawPin string) error {
+	pin, err := a.authRepo.GetUserPin(ctx, email)
+	if err != nil {
+		return err
+	}
+	if pin.PinHash == nil || len(*pin.PinHash) == 0 {
+		return errors.New("pin not set")
+	}
+	var hc pkg.HashConfig
+	hc.UseRecommended()
+	if err := hc.Compare(rawPin, *pin.PinHash); err != nil {
+		return errors.New("invalid pin")
+	}
+	return nil
 }
