@@ -94,14 +94,6 @@ func historyTitle(h model.HistoryItem) string {
 	}
 }
 
-// GetSummary godoc
-//
-//	@Summary		Dashboard — financial summary
-//	@Tags			Transaction
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Success		200	{object}	dto.Response{data=dto.SummaryResponse}
-//	@Router			/transaction/summary [get]
 func (t *TransactionController) GetSummary(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -120,16 +112,6 @@ func (t *TransactionController) GetSummary(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccess("Summary successfully retrieved", dto.SummaryResponse{CurrentBalance: summary.CurrentBalance, TotalIncome: summary.TotalIncome, TotalExpense: summary.TotalExpense, Wallets: wallets}))
 }
 
-// GetTransactionReport godoc
-//
-//	@Summary		Dashboard — graph data
-//	@Tags			Transaction
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			range	query	string	false	"7days|30days"		default(7days)
-//	@Param			type	query	string	false	"income|expense|both"	default(both)
-//	@Success		200	{object}	dto.Response{data=dto.TransactionReportResponse}
-//	@Router			/transaction/report [get]
 func (t *TransactionController) GetTransactionReport(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -168,17 +150,6 @@ func (t *TransactionController) GetTransactionReport(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccess("Report successfully retrieved", dto.TransactionReportResponse{Range: rangeParam, Type: typeFilter, Points: resp}))
 }
 
-// GetTransactions godoc
-//
-//	@Summary		List ledger transactions
-//	@Tags			Transaction
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			wallet_id	query	string	false	"Filter by wallet UUID"
-//	@Param			page		query	int		false	"default 1"
-//	@Param			limit		query	int		false	"default 10"
-//	@Success		200	{object}	dto.Response{data=dto.TransactionListResponse}
-//	@Router			/transaction/ [get]
 func (t *TransactionController) GetTransactions(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -219,19 +190,6 @@ func (t *TransactionController) GetTransactions(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccess("Transactions retrieved successfully", dto.TransactionListResponse{Data: responses, Total: total, Page: page, Limit: limit}))
 }
 
-// GetHistory godoc
-//
-//	@Summary		Unified history (transactions + topups)
-//	@Description	Returns a single paginated list combining ledger transactions AND topup records, sorted newest-first. Use this for the "History" screen.
-//	@Tags			Transaction
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			page	query	int	false	"Page number (min 1)"	default(1)
-//	@Param			limit	query	int	false	"Items per page (1–100)"	default(10)
-//	@Success		200	{object}	dto.Response{data=dto.HistoryListResponse}	"Unified history"
-//	@Failure		401	{object}	dto.Response
-//	@Failure		500	{object}	dto.Response
-//	@Router			/transaction/history [get]
 func (t *TransactionController) GetHistory(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -271,15 +229,6 @@ func (t *TransactionController) GetHistory(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccess("History retrieved successfully", dto.HistoryListResponse{Data: resp, Total: total, Page: page, Limit: limit}))
 }
 
-// GetTransactionByID godoc
-//
-//	@Summary		Get transaction detail
-//	@Tags			Transaction
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			id	path	string	true	"Transaction UUID"
-//	@Success		200	{object}	dto.Response{data=dto.TransactionResponse}
-//	@Router			/transaction/{id} [get]
 func (t *TransactionController) GetTransactionByID(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -299,19 +248,6 @@ func (t *TransactionController) GetTransactionByID(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccess("Transaction retrieved successfully", txToResponse(tx)))
 }
 
-// CreateTopup godoc
-//
-//	@Summary		Initiate a top-up (PIN required)
-//	@Description	Creates a PENDING top-up. PIN is verified before the record is created. Call PATCH /topup/{id}/confirm to credit the wallet.
-//	@Tags			Transaction
-//	@Accept			json
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			body	body	dto.TopupRequest	true	"Top-up payload (includes pin)"
-//	@Success		201	{object}	dto.Response{data=dto.TopupResponse}
-//	@Failure		400	{object}	dto.Response
-//	@Failure		401	{object}	dto.Response	"Unauthorized or wrong PIN"
-//	@Router			/transaction/topup [post]
 func (t *TransactionController) CreateTopup(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -358,15 +294,6 @@ func (t *TransactionController) CreateTopup(ctx *gin.Context) {
 	}))
 }
 
-// ConfirmTopup godoc
-//
-//	@Summary		Confirm a top-up
-//	@Tags			Transaction
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			id	path	string	true	"Top-up UUID"
-//	@Success		200	{object}	dto.Response{data=dto.TopupResponse}
-//	@Router			/transaction/topup/{id}/confirm [patch]
 func (t *TransactionController) ConfirmTopup(ctx *gin.Context) {
 	_, ok := claimsEmail(ctx)
 	if !ok {
@@ -394,18 +321,6 @@ func (t *TransactionController) ConfirmTopup(ctx *gin.Context) {
 	}))
 }
 
-// CreateWithdrawal godoc
-//
-//	@Summary		Withdraw to bank account (PIN required)
-//	@Tags			Transaction
-//	@Accept			json
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			body	body	dto.WithdrawalRequest	true	"Withdrawal payload (includes pin)"
-//	@Success		201	{object}	dto.Response{data=dto.WithdrawalResponse}
-//	@Failure		401	{object}	dto.Response	"Unauthorized or wrong PIN"
-//	@Failure		422	{object}	dto.Response	"Insufficient balance"
-//	@Router			/transaction/withdrawal [post]
 func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -445,19 +360,6 @@ func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 	}))
 }
 
-// CreateTransfer godoc
-//
-//	@Summary		Transfer funds between wallets (PIN required)
-//	@Description	Atomically debits sender and credits recipient. Response contains ONLY the sender's transaction. The recipient receives an in-app notification.
-//	@Tags			Transaction
-//	@Accept			json
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			body	body	dto.TransferRequest	true	"Transfer payload (includes pin)"
-//	@Success		201	{object}	dto.Response{data=dto.TransferResponse}	"Sender-only transfer result"
-//	@Failure		401	{object}	dto.Response	"Unauthorized or wrong PIN"
-//	@Failure		422	{object}	dto.Response	"Insufficient balance"
-//	@Router			/transaction/transfer [post]
 func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -514,18 +416,6 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 	}))
 }
 
-// CreateExpense godoc
-//
-//	@Summary		Record an expense (PIN required)
-//	@Tags			Transaction
-//	@Accept			json
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			body	body	dto.ExpenseRequest	true	"Expense payload (includes pin)"
-//	@Success		201	{object}	dto.Response{data=dto.ExpenseResponse}
-//	@Failure		401	{object}	dto.Response	"Unauthorized or wrong PIN"
-//	@Failure		422	{object}	dto.Response	"Insufficient balance"
-//	@Router			/transaction/expense [post]
 func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -577,17 +467,6 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 	}))
 }
 
-// FindReceivers godoc
-//
-//	@Summary		Search transfer receivers
-//	@Tags			Transaction
-//	@Produce		json
-//	@Security		BearerAuth
-//	@Param			q		query	string	true	"Search query (min 2 chars)"
-//	@Param			page	query	int		false	"default 1"
-//	@Param			limit	query	int		false	"default 10"
-//	@Success		200	{object}	dto.Response{data=dto.ReceiverListResponse}
-//	@Router			/transaction/receiver [get]
 func (t *TransactionController) FindReceivers(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
