@@ -1,0 +1,113 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+	"github.com/rivando-al-rasyid/vanwallet-backend/internals/cache"
+	"github.com/rivando-al-rasyid/vanwallet-backend/internals/model"
+)
+
+type TransactionRepository interface {
+	VerifyPIN(ctx context.Context, email, rawPin string) error
+	GetSummary(ctx context.Context, email string) (model.TransactionSummary, error)
+	GetTransactionReport(ctx context.Context, email, rangeParam, typeFilter string) ([]model.ChartPoint, error)
+	GetTransactionsByWallet(ctx context.Context, email string, walletID uuid.UUID, page, limit int) ([]model.Transaction, int, error)
+	GetAllTransactions(ctx context.Context, email string, page, limit int) ([]model.Transaction, int, error)
+	GetAllHistory(ctx context.Context, email string, page, limit int) ([]model.HistoryItem, int, error)
+	GetTransactionByID(ctx context.Context, email string, transactionID uuid.UUID) (model.Transaction, error)
+	CreateTopup(ctx context.Context, req model.Topup) (model.Topup, error)
+	ConfirmTopup(ctx context.Context, topupID uuid.UUID) (model.Topup, error)
+	CreateWithdrawal(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, bank model.Withdrawal) (model.Transaction, error)
+	CreateTransfer(ctx context.Context, senderWalletID, recipientWalletID uuid.UUID, amount, adminFee int64, note *string) (model.Transfer, model.Transaction, model.Transaction, error)
+	CreateExpense(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, category, merchantName, note *string) (model.Transaction, error)
+	SearchReceivers(ctx context.Context, callerEmail, query string, page, limit int) ([]model.ReceiverResult, int, error)
+}
+
+type TransactionService struct {
+	repo TransactionRepository
+	rdb  *redis.Client
+}
+
+func NewTransactionService(repo TransactionRepository) *TransactionService {
+	return &TransactionService{repo: repo}
+
+}
+
+// VerifyPIN checks the stored argon2 PIN hash against rawPin before committing any sensitive operation.
+func (s *TransactionService) VerifyPIN(ctx context.Context, email, rawPin string) error {
+	return s.repo.VerifyPIN(ctx, email, rawPin)
+}
+
+func (s *TransactionService) GetSummary(ctx context.Context, email string) (model.TransactionSummary, error) {
+	return s.repo.GetSummary(ctx, email)
+}
+
+func (s *TransactionService) GetTransactionReport(ctx context.Context, email, rangeParam, typeFilter string) ([]model.ChartPoint, error) {
+	return s.repo.GetTransactionReport(ctx, email, rangeParam, typeFilter)
+}
+
+func (s *TransactionService) GetTransactionsByWallet(ctx context.Context, email string, walletID uuid.UUID, page, limit int) ([]model.Transaction, int, error) {
+	return s.repo.GetTransactionsByWallet(ctx, email, walletID, page, limit)
+}
+
+func (s *TransactionService) GetAllTransactions(ctx context.Context, email string, page, limit int) ([]model.Transaction, int, error) {
+	return s.repo.GetAllTransactions(ctx, email, page, limit)
+}
+
+func (s *TransactionService) GetAllHistory(ctx context.Context, email string, page, limit int) ([]model.HistoryItem, int, error) {
+	rkey := fmt.Sprintf("vando:history:%s:p%d:l%d", email, page, limit)
+
+	var history []model.HistoryItem
+	if err := cache.GetFromCache(ctx, s.rdb, rkey, &history); err == nil {
+		log.Println("cache hit:", email)
+		return history, len(history), nil
+	} else if !errors.Is(err, redis.Nil) {
+		log.Println("redis error:", err)
+	}
+
+	log.Println("cache miss:", email)
+
+	fetched, total, err := s.repo.GetAllHistory(ctx, email, page, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if err := cache.SaveToCache(ctx, s.rdb, rkey, fetched); err != nil {
+		log.Println("cache save error:", err)
+	}
+
+	return fetched, total, nil
+}
+
+func (s *TransactionService) GetTransactionByID(ctx context.Context, email string, transactionID uuid.UUID) (model.Transaction, error) {
+	return s.repo.GetTransactionByID(ctx, email, transactionID)
+}
+
+func (s *TransactionService) CreateTopup(ctx context.Context, req model.Topup) (model.Topup, error) {
+	return s.repo.CreateTopup(ctx, req)
+}
+
+func (s *TransactionService) ConfirmTopup(ctx context.Context, topupID uuid.UUID) (model.Topup, error) {
+	return s.repo.ConfirmTopup(ctx, topupID)
+}
+
+func (s *TransactionService) CreateWithdrawal(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, bank model.Withdrawal) (model.Transaction, error) {
+	return s.repo.CreateWithdrawal(ctx, walletID, amount, adminFee, bank)
+}
+
+func (s *TransactionService) CreateTransfer(ctx context.Context, senderWalletID, recipientWalletID uuid.UUID, amount, adminFee int64, note *string) (model.Transfer, model.Transaction, model.Transaction, error) {
+	return s.repo.CreateTransfer(ctx, senderWalletID, recipientWalletID, amount, adminFee, note)
+}
+
+func (s *TransactionService) CreateExpense(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, category, merchantName, note *string) (model.Transaction, error) {
+	return s.repo.CreateExpense(ctx, walletID, amount, adminFee, category, merchantName, note)
+}
+
+func (s *TransactionService) SearchReceivers(ctx context.Context, callerEmail, query string, page, limit int) ([]model.ReceiverResult, int, error) {
+	return s.repo.SearchReceivers(ctx, callerEmail, query, page, limit)
+}

@@ -20,38 +20,35 @@ import (
 // @host						localhost:8080
 // @BasePath					/
 
-// @securityDefinitions.apikey	ApiKeyAuth
-// @in							header
-// @name						Authorization
-// @description					Bearer token used for authorization
+// @securityDefinitions.apikey  BearerAuth
+// @in                          header
+// @name                        Authorization
+// @description                 Type "Bearer" followed by a space and your JWT. Example: "Bearer eyJhbGci..."
 
 func main() {
-	// Load .env — tidak fatal jika tidak ada (untuk production compatibility)
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, relying on system environment variables")
+		log.Fatalf("Error loading env. \ncause: %s", err.Error())
 	}
-
-	// Connect DB dulu sebelum register router apapun
+	// inisialisasi
+	// gin.New()
+	app := gin.Default()
+	// connect ke db
 	db, err := config.ConnectPsql()
 	if err != nil {
-		log.Fatalf("DB connection error.\ncause: %s", err.Error())
+		log.Fatalf("DB connection error. \ncause: %s", err.Error())
 	}
 	defer db.Close()
 	log.Println("DB Connected")
-
-	// Inisialisasi Gin
-	app := gin.Default()
-
-	// Register semua router setelah DB siap
-	router.MainRouter(app, db)
-
-	// Run server dengan fallback default
-	host := os.Getenv("APP_HOST")
-	port := os.Getenv("APP_PORT")
-	addr := fmt.Sprintf("%s:%s", host, port)
-	log.Printf("Server running at %s", addr)
-
-	if err := app.Run(addr); err != nil {
-		log.Fatalf("Failed to start server.\ncause: %s", err.Error())
+	// connect ke redis
+	rc, err := config.ConnectRedis()
+	if err != nil {
+		log.Fatalf("Redis connection error. \ncause: %s", err.Error())
 	}
+	defer rc.Close()
+	log.Println("Redis Connected")
+	// install router
+	router.MainRouter(app, db, rc)
+	// run
+	// addr := fmt.Sprintf("%s:%s", os.Getenv("APP_HOST"), os.Getenv("APP_PORT"))
+	app.Run(fmt.Sprintf("%s:%s", os.Getenv("APP_HOST"), os.Getenv("APP_PORT")))
 }

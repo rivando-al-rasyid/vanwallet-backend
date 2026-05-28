@@ -1,15 +1,18 @@
 package model
 
-import "github.com/google/uuid"
+import (
+	"time"
 
-// Transfer links both sides of a peer-to-peer transfer.
-//
-//   - TransactionID        → the OUT transaction row (sender's ledger entry)
-//   - SenderTransactionID  → the IN  transaction row (recipient's ledger entry)
-//   - RecipientWalletID    → destination wallet
+	"github.com/google/uuid"
+)
+
+// Transfer links BOTH sides of a peer-to-peer transfer.
+//   - TransactionID          → the TRANSFER_OUT transaction row (sender's ledger entry)
+//   - RecipientTransactionID → the TRANSFER_IN  transaction row (recipient's ledger entry)
+//   - TransferCode           → optional human-readable reference code
 type Transfer struct {
-	TransactionID       uuid.UUID `db:"transaction_id"`
-	SenderTransactionID uuid.UUID `db:"sender_transaction_id"`
-	RecipientWalletID   uuid.UUID `db:"recipient_wallet_id"`
-	TransferCode        *string   `db:"transfer_code"`
+	TransactionID          uuid.UUID  `db:"transaction_id"`
+	RecipientTransactionID uuid.UUID  `db:"recipient_transaction_id"`
+	TransferCode           *string    `db:"transfer_code"`
+	CreatedAt              time.Time  `db:"created_at"`
 }

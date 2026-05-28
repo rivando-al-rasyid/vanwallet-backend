@@ -2,7 +2,12 @@ package service
 
 import (
 	"context"
+	"errors"
+	"log"
+	"time"
 
+	"github.com/redis/go-redis/v9"
+	"github.com/rivando-al-rasyid/vanwallet-backend/internals/cache"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/dto"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/model"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/pkg"
@@ -11,36 +16,34 @@ import (
 type AuthRepo interface {
 	Register(ctx context.Context, email, password string) (model.User, error)
 	Login(ctx context.Context, email string) (model.User, error)
-	ClearToken(ctx context.Context, userID string) error
 	GetUserPin(ctx context.Context, email string) (model.UserPin, error)
+	SaveToken(ctx context.Context, userID, rawToken string, tokenType model.TokenType, expiresAt time.Time) error
+	RevokeToken(ctx context.Context, rawToken string) error
+	IsTokenValid(ctx context.Context, rawToken string) (bool, error)
 }
 
 type AuthService struct {
 	authRepo AuthRepo
+	rdb      *redis.Client
 }
 
-func NewAuthService(authRepo AuthRepo) *AuthService {
-	return &AuthService{authRepo: authRepo}
+func NewAuthService(authRepo AuthRepo, rdb *redis.Client) *AuthService {
+	return &AuthService{authRepo: authRepo, rdb: rdb}
 }
 
 func (a *AuthService) Register(ctx context.Context, user dto.RegisterRequest) (dto.UserResponse, error) {
 	var hc pkg.HashConfig
 	hc.UseRecommended()
 	hashedPwd := hc.GenHash(user.Password)
-
-	registerResult, err := a.authRepo.Register(ctx, user.Email, hashedPwd)
+	result, err := a.authRepo.Register(ctx, user.Email, hashedPwd)
 	if err != nil {
 		return dto.UserResponse{}, err
 	}
-
-	return dto.UserResponse{
-		ID:    registerResult.ID,
-		Email: registerResult.Email,
-	}, nil
+	return dto.UserResponse{ID: result.ID, Email: result.Email}, nil
 }
 
 func (a *AuthService) Login(ctx context.Context, user dto.LoginRequest) (string, error) {
-	login, err := a.authRepo.Login(ctx, user.Email)
+	login, err := a.getOrFetchUser(ctx, user.Email)
 	if err != nil {
 		return "", err
 	}
@@ -55,13 +58,76 @@ func (a *AuthService) Login(ctx context.Context, user dto.LoginRequest) (string,
 	if err != nil {
 		return "", err
 	}
+	expiresAt := time.Now().Add(pkg.AccessTokenExpiry)
+	if err := a.authRepo.SaveToken(
+		ctx,
+		login.ID.String(),
+		token,
+		model.TokenTypeRefresh,
+		expiresAt,
+	); err != nil {
+		return "", err
+	}
+
 	return token, nil
+}
+
+func (a *AuthService) getOrFetchUser(ctx context.Context, email string) (*model.User, error) {
+	rkey := "vando:user:" + email
+
+	var user model.User
+	if err := cache.GetFromCache(ctx, a.rdb, rkey, &user); err == nil {
+		log.Println("cache hit:", email)
+		return &user, nil
+	} else if !errors.Is(err, redis.Nil) {
+		log.Println("redis error:", err)
+	}
+
+	log.Println("cache miss:", email)
+	fetched, err := a.authRepo.Login(ctx, email)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := cache.SaveToCache(ctx, a.rdb, rkey, fetched); err != nil {
+		log.Println("cache save error:", err) // non-fatal
+	}
+
+	return &fetched, nil
+}
+
+func (a *AuthService) Logout(ctx context.Context, rawToken, email string) error {
+	if err := a.authRepo.RevokeToken(ctx, rawToken); err != nil {
+		return err
+	}
+	rkey := "vando:user:" + email
+	if err := cache.DelFromCache(ctx, a.rdb, rkey); err != nil {
+		log.Println("cache evict error on logout:", err) // non-fatal
+	}
+	return nil
+}
+
+// IsTokenValid checks the tokens table.
+func (a *AuthService) IsTokenValid(ctx context.Context, rawToken string) (bool, error) {
+	return a.authRepo.IsTokenValid(ctx, rawToken)
 }
 
 func (a *AuthService) GetUserPin(ctx context.Context, email string) (model.UserPin, error) {
 	return a.authRepo.GetUserPin(ctx, email)
 }
 
-func (a *AuthService) Logout(ctx context.Context, userID string) error {
-	return a.authRepo.ClearToken(ctx, userID)
+func (a *AuthService) VerifyPin(ctx context.Context, email, rawPin string) error {
+	pin, err := a.authRepo.GetUserPin(ctx, email)
+	if err != nil {
+		return err
+	}
+	if pin.PinHash == nil || len(*pin.PinHash) == 0 {
+		return errors.New("pin not set")
+	}
+	var hc pkg.HashConfig
+	hc.UseRecommended()
+	if err := hc.Compare(rawPin, *pin.PinHash); err != nil {
+		return errors.New("invalid pin")
+	}
+	return nil
 }

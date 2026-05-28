@@ -1,12 +1,21 @@
 package model
 
-import "github.com/google/uuid"
+import (
+	"time"
 
-// Topup holds payment-gateway-specific data for a top-up transaction.
-// ExternalReference is the reference ID from the payment gateway (DANA, GoPay, etc.)
-// and its uniqueness constraint enables idempotency checks.
+	"github.com/google/uuid"
+)
+
+// Topup is a standalone top-up record (NOT part of the transactions ledger).
+// ExternalReference uniqueness enables payment-gateway idempotency checks.
 type Topup struct {
-	TransactionID     uuid.UUID      `db:"transaction_id"`
-	PaymentMethod     *PaymentMethod `db:"payment_method"`
-	ExternalReference *string        `db:"external_reference"`
+	ID                uuid.UUID         `db:"id"`
+	WalletID          uuid.UUID         `db:"wallet_id"`
+	Amount            int64             `db:"amount"`
+	Status            TransactionStatus `db:"status"`
+	PaymentMethod     *PaymentMethod    `db:"payment_method"`
+	PaymentMetadata   *[]byte           `db:"payment_metadata"` // jsonb
+	ExternalReference *string           `db:"external_reference"`
+	CreatedAt         time.Time         `db:"created_at"`
+	UpdatedAt         *time.Time        `db:"updated_at"`
 }

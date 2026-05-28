@@ -21,10 +21,12 @@ const (
 	PaymentMethodOVO   PaymentMethod = "OVO"
 )
 
-// Direction represents the flow direction of a transaction.
-type Direction string
+// TransactionType represents the type of a transaction (matches DB enum).
+type TransactionType string
 
 const (
-	DirectionIn  Direction = "IN"
-	DirectionOut Direction = "OUT"
+	TransactionTypeExpense      TransactionType = "EXPENSE"
+	TransactionTypeWithdrawal   TransactionType = "WITHDRAWAL"
+	TransactionTypeTransferIn   TransactionType = "TRANSFER_IN"
+	TransactionTypeTransferOut  TransactionType = "TRANSFER_OUT"
 )
