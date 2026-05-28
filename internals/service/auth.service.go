@@ -80,7 +80,7 @@ func (a *AuthService) getOrFetchUser(ctx context.Context, email string) (*model.
 		log.Println("cache hit:", email)
 		return &user, nil
 	} else if !errors.Is(err, redis.Nil) {
-		log.Println("redis error:", err) // degrade gracefully
+		log.Println("redis error:", err)
 	}
 
 	log.Println("cache miss:", email)

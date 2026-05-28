@@ -2,8 +2,13 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"log"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+	"github.com/rivando-al-rasyid/vanwallet-backend/internals/cache"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/model"
 )
 
@@ -23,10 +28,14 @@ type TransactionRepository interface {
 	SearchReceivers(ctx context.Context, callerEmail, query string, page, limit int) ([]model.ReceiverResult, int, error)
 }
 
-type TransactionService struct{ repo TransactionRepository }
+type TransactionService struct {
+	repo TransactionRepository
+	rdb  *redis.Client
+}
 
 func NewTransactionService(repo TransactionRepository) *TransactionService {
 	return &TransactionService{repo: repo}
+
 }
 
 // VerifyPIN checks the stored argon2 PIN hash against rawPin before committing any sensitive operation.
@@ -50,9 +59,29 @@ func (s *TransactionService) GetAllTransactions(ctx context.Context, email strin
 	return s.repo.GetAllTransactions(ctx, email, page, limit)
 }
 
-// GetAllHistory returns unified history: ledger transactions + topups, sorted newest first.
 func (s *TransactionService) GetAllHistory(ctx context.Context, email string, page, limit int) ([]model.HistoryItem, int, error) {
-	return s.repo.GetAllHistory(ctx, email, page, limit)
+	rkey := fmt.Sprintf("vando:history:%s:p%d:l%d", email, page, limit)
+
+	var history []model.HistoryItem
+	if err := cache.GetFromCache(ctx, s.rdb, rkey, &history); err == nil {
+		log.Println("cache hit:", email)
+		return history, len(history), nil
+	} else if !errors.Is(err, redis.Nil) {
+		log.Println("redis error:", err)
+	}
+
+	log.Println("cache miss:", email)
+
+	fetched, total, err := s.repo.GetAllHistory(ctx, email, page, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if err := cache.SaveToCache(ctx, s.rdb, rkey, fetched); err != nil {
+		log.Println("cache save error:", err)
+	}
+
+	return fetched, total, nil
 }
 
 func (s *TransactionService) GetTransactionByID(ctx context.Context, email string, transactionID uuid.UUID) (model.Transaction, error) {
