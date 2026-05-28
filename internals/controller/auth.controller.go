@@ -19,6 +19,18 @@ func NewAuthController(authservice *service.AuthService) *AuthController {
 	return &AuthController{authservice: authservice}
 }
 
+// Register godoc
+// @Summary      Register a new systemic user entity
+// @Description  Creates an absolute identity space record within the backend infrastructure dataset[cite: 3].
+// @Tags         Authentication
+// @Accept       json
+// @Produce      json
+// @Param        body  body      dto.RegisterRequest  true  "Sign up identification credentials payload"
+// @Success      201   {object}  dto.Response{data=dto.UserResponse}
+// @Failure      400   {object}  dto.Response{error}
+// @Failure      409   {object}  dto.Response{error}
+// @Failure      500   {object}  dto.Response{error}
+// @Router       /auth/register [post]
 func (a *AuthController) Register(ctx *gin.Context) {
 	var body dto.RegisterRequest
 	if err := ctx.ShouldBindJSON(&body); err != nil {
@@ -43,6 +55,17 @@ func (a *AuthController) Register(ctx *gin.Context) {
 	ctx.JSON(http.StatusCreated, dto.NewSuccess("User successfully registered", res))
 }
 
+// Login godoc
+// @Summary      Authenticate profile session token
+// @Description  Verifies input entries against structural data records to issue signed verification JWTs[cite: 3].
+// @Tags         Authentication
+// @Accept       json
+// @Produce      json
+// @Param        body  body      dto.LoginRequest  true  "Identity access block data definitions"
+// @Success      200   {object}  dto.Response{data=dto.UserResponse}
+// @Failure      400   {object}  dto.Response{error}
+// @Failure      401   {object}  dto.Response{error}
+// @Router       /auth/login [post]
 func (a *AuthController) Login(ctx *gin.Context) {
 	var body dto.LoginRequest
 	if err := ctx.ShouldBindJSON(&body); err != nil {
@@ -61,6 +84,16 @@ func (a *AuthController) Login(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccess("Login successful", token))
 }
 
+// Logout godoc
+// @Summary      Terminates system session tokens
+// @Description  Invalidates the currently active authorization signature directly inside redis/database memory pools[cite: 3].
+// @Tags         Authentication
+// @Accept       json
+// @Produce      json
+// @Success      200            {object}  dto.Response{data=object}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      500            {object}  dto.Response{error}
+// @Router       /auth/logout [post]
 func (a *AuthController) Logout(ctx *gin.Context) {
 	claimsRaw, exists := ctx.Get("claims")
 	if !exists {
@@ -84,6 +117,17 @@ func (a *AuthController) Logout(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccessNoData("Logged out successfully"))
 }
 
+// GetPIN godoc
+// @Summary      Get internal system PIN hash sequence
+// @Description  Fetches the secure transaction authentication pin configuration status block[cite: 3].
+// @Tags         Authentication
+// @Accept       json
+// @Produce      json
+// @Success      200            {object}  dto.Response{data=string}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      404            {object}  dto.Response{error}
+// @Failure      500            {object}  dto.Response{error}
+// @Router       /auth/pin [get]
 func (a *AuthController) GetPIN(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
@@ -108,6 +152,17 @@ func (a *AuthController) GetPIN(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccess("PIN successfully retrieved", pin.PinHash))
 }
 
+// VerifyPIN godoc
+// @Summary      Verify validity of PIN entry blocks
+// @Description  Evaluates transactional authorization structures before processing balance updates[cite: 3].
+// @Tags         Authentication
+// @Accept       json
+// @Produce      json
+// @Param        body           body      dto.VerifyPinRequest  true  "Pin block parameters validation request"
+// @Success      200            {object}  dto.Response{data=object}
+// @Failure      400            {object}  dto.Response{error}
+// @Failure      401            {object}  dto.Response{error}
+// @Router       /auth/pin/verify [post]
 func (a *AuthController) VerifyPIN(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
