@@ -148,16 +148,16 @@ func (p *ProfileController) EditProfile(ctx *gin.Context) {
 
 // EditPin godoc
 // @Summary      Update user secondary authorization pin
-// @Description  Alters the security token hash sequence used for transaction validation operations[cite: 2].
+// @Description  First-time setup: provide only pin_hash. Changing existing PIN: provide old_pin + pin_hash.
 // @Tags         Profile
 // @Accept       json
 // @Produce      json
-// @Param        body           body      dto.SetPinRequest  true  "Target numerical hash token block specifications"
+// @Param        body           body      dto.SetPinRequest  true  "PIN update payload"
 // @Success      200            {object}  dto.Response{data=object}
 // @Failure      400            {object}  dto.Response{error}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
-// @Router       /profile/pin [put]
+// @Router       /profile/change/pin [post]
 func (p *ProfileController) EditPin(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
@@ -172,8 +172,12 @@ func (p *ProfileController) EditPin(ctx *gin.Context) {
 		return
 	}
 
-	_, err := p.profileservice.EditPin(ctx.Request.Context(), email, *body.PinHash)
+	_, err := p.profileservice.EditPinWithAuth(ctx.Request.Context(), email, body.OldPin, *body.PinHash)
 	if err != nil {
+		if err.Error() == "old pin is required" || err.Error() == "invalid old pin" {
+			ctx.JSON(http.StatusUnauthorized, dto.NewError("Failed to update PIN", err.Error()))
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to update PIN", err.Error()))
 		return
 	}
@@ -252,5 +256,6 @@ func (p *ProfileController) GetUserInfo(ctx *gin.Context) {
 		Phone:          profile.Phone,
 		Photo:          profile.Photo,
 		CurrentBalance: balance,
+		PinHash:        profile.PinHash,
 	}))
 }
