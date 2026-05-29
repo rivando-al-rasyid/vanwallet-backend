@@ -90,6 +90,7 @@ func (a *AuthController) Login(ctx *gin.Context) {
 // @Tags         Authentication
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Success      200            {object}  dto.Response{data=object}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
@@ -123,6 +124,7 @@ func (a *AuthController) Logout(ctx *gin.Context) {
 // @Tags         Authentication
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Success      200            {object}  dto.Response{data=string}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      404            {object}  dto.Response{error}
@@ -158,6 +160,7 @@ func (a *AuthController) GetPIN(ctx *gin.Context) {
 // @Tags         Authentication
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Param        body           body      dto.VerifyPinRequest  true  "Pin block parameters validation request"
 // @Success      200            {object}  dto.Response{data=object}
 // @Failure      400            {object}  dto.Response{error}

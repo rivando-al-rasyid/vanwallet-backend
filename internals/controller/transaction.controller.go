@@ -93,10 +93,11 @@ func historyTitle(h model.HistoryItem) string {
 
 // GetSummary godoc
 // @Summary      Get user financial summary
-// @Description  Retrieves current balance, total income, total expense, and related wallets summary[cite: 1].
+// @Description  Retrieves current balance, total income, total expense, and related wallets summary.
 // @Tags         Transactions
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Success      200            {object}  dto.Response{data=dto.SummaryResponse}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
@@ -121,10 +122,11 @@ func (t *TransactionController) GetSummary(ctx *gin.Context) {
 
 // GetTransactionReport godoc
 // @Summary      Get chart report analytics
-// @Description  Fetches graphical data for income/expenses across specified temporal intervals[cite: 1].
+// @Description  Fetches graphical data for income/expenses across specified temporal intervals.
 // @Tags         Transactions
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Param        range          query     string  false  "Time span filter" Enums(7days, 30days) default(7days)
 // @Param        type           query     string  false  "Financial stream categorization" Enums(income, expense, both) default(both)
 // @Success      200            {object}  dto.Response{data=dto.TransactionReportResponse}
@@ -172,10 +174,11 @@ func (t *TransactionController) GetTransactionReport(ctx *gin.Context) {
 
 // GetTransactions godoc
 // @Summary      List all technical ledger records
-// @Description  Queries low-level ledger items with pagination, option to limit scope by wallet UUID[cite: 1].
+// @Description  Queries low-level ledger items with pagination, option to limit scope by wallet UUID.
 // @Tags         Transactions
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Param        page           query     int     false  "Page target number" default(1)
 // @Param        limit          query     int     false  "Data slice size boundary" default(10)
 // @Param        wallet_id      query     string  false  "Target operational entity UUID filter"
@@ -226,10 +229,11 @@ func (t *TransactionController) GetTransactions(ctx *gin.Context) {
 
 // GetHistory godoc
 // @Summary      Get user friendly historical logs
-// @Description  Queries normalized user operational logs suitable for high-level transactional feeds[cite: 1].
+// @Description  Queries normalized user operational logs suitable for high-level transactional feeds.
 // @Tags         Transactions
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Param        page           query     int     false  "Page target number" default(1)
 // @Param        limit          query     int     false  "Data slice size boundary" default(10)
 // @Success      200            {object}  dto.Response{data=dto.HistoryListResponse}
@@ -277,10 +281,11 @@ func (t *TransactionController) GetHistory(ctx *gin.Context) {
 
 // GetTransactionByID godoc
 // @Summary      Get isolated ledger item details
-// @Description  Extracts data attributes of a specific transaction by explicit UUID entry[cite: 1].
+// @Description  Extracts data attributes of a specific transaction by explicit UUID entry.
 // @Tags         Transactions
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Param        id             path      string  true  "Transaction UUID identifier"
 // @Success      200            {object}  dto.Response{data=dto.TransactionResponse}
 // @Failure      400            {object}  dto.Response{error}
@@ -308,10 +313,11 @@ func (t *TransactionController) GetTransactionByID(ctx *gin.Context) {
 
 // CreateTopup godoc
 // @Summary      Initiate financial deposit pipeline
-// @Description  Spawns an internal pending top-up structure targeting an active wallet instance[cite: 1].
+// @Description  Spawns an internal pending top-up structure targeting an active wallet instance.
 // @Tags         Transactions
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Param        body           body      dto.TopupRequest  true  "Deposit payload specs"
 // @Success      201            {object}  dto.Response{data=dto.TopupResponse}
 // @Failure      400            {object}  dto.Response{error}
@@ -365,10 +371,11 @@ func (t *TransactionController) CreateTopup(ctx *gin.Context) {
 
 // ConfirmTopup godoc
 // @Summary      Finalize operational top-up event
-// @Description  Validates internal states to switch a top-up balance allocation from pending to active[cite: 1].
+// @Description  Validates internal states to switch a top-up balance allocation from pending to active.
 // @Tags         Transactions
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Param        id             path      string  true  "Top-up entity UUID pointer"
 // @Success      200            {object}  dto.Response{data=dto.TopupResponse}
 // @Failure      400            {object}  dto.Response{error}
@@ -404,10 +411,11 @@ func (t *TransactionController) ConfirmTopup(ctx *gin.Context) {
 
 // CreateWithdrawal godoc
 // @Summary      Execute capital exit pipeline
-// @Description  Deducts assets out of the e-wallet matrix into external physical banking infrastructure[cite: 1].
+// @Description  Deducts assets out of the e-wallet matrix into external physical banking infrastructure.
 // @Tags         Transactions
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Param        body           body      dto.WithdrawalRequest  true  "Withdrawal parameters details"
 // @Success      201            {object}  dto.Response{data=dto.WithdrawalResponse}
 // @Failure      400            {object}  dto.Response{error}
@@ -455,10 +463,11 @@ func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 
 // CreateTransfer godoc
 // @Summary      Inter-wallet peer asset migration
-// @Description  Executes nuclear ledger balanced migrations across separate user wallets inside the application[cite: 1].
+// @Description  Executes nuclear ledger balanced migrations across separate user wallets inside the application.
 // @Tags         Transactions
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Param        body           body      dto.TransferRequest  true  "Transfer structural definition payload"
 // @Success      201            {object}  dto.Response{data=dto.TransferResponse}
 // @Failure      400            {object}  dto.Response{error}
@@ -522,10 +531,11 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 
 // CreateExpense godoc
 // @Summary      Log an outward operational purchase
-// @Description  Commits real-time commercial transactional operations by updating categorical metadata indexes[cite: 1].
+// @Description  Commits real-time commercial transactional operations by updating categorical metadata indexes.
 // @Tags         Transactions
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Param        body           body      dto.ExpenseRequest  true  "Expense context descriptors body"
 // @Success      201            {object}  dto.Response{data=dto.ExpenseResponse}
 // @Failure      400            {object}  dto.Response{error}
@@ -585,10 +595,11 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 
 // FindReceivers godoc
 // @Summary      Search system profiles for transactions
-// @Description  Returns filtered structural matches for processing inter-user transactional lookups[cite: 1].
+// @Description  Returns filtered structural matches for processing inter-user transactional lookups.
 // @Tags         Transactions
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Param        q              query     string  true   "Lookup parameter string minimum length 2 characters"
 // @Param        page           query     int     false  "Page target number" default(1)
 // @Param        limit          query     int     false  "Data slice size boundary" default(10)

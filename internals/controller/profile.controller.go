@@ -29,10 +29,11 @@ func NewProfileController(profileservice *service.ProfileService) *ProfileContro
 
 // GetProfile godoc
 // @Summary      Get user profile details
-// @Description  Retrieves current authentication details' full name, telephone connection code, and user avatar endpoint[cite: 2].
+// @Description  Retrieves current authentication details' full name, telephone connection code, and user avatar endpoint.
 // @Tags         Profile
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Success      200            {object}  dto.Response{data=dto.ProfileResponse}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      404            {object}  dto.Response{error}
@@ -93,13 +94,15 @@ func (p *ProfileController) validateAndSavePhoto(ctx *gin.Context, photo *multip
 
 // EditProfile godoc
 // @Summary      Modify active user profile records
-// @Description  Updates system details including full name text, phone data info, and multipart image form attachments[cite: 2].
+// @Description  Updates system details including full name text, phone data info, and multipart image form attachments.
 // @Tags         Profile
 // @Accept       multipart/form-data
 // @Produce      json
-// @Param        full_name      formData  string  false "Updated full identity name representation"[cite: 2]
-// @Param        phone          formData  string  false "Target telecommunications contact identity sequence"[cite: 2]
-// @Param        photo          formData  file    false "Binary source file image attachment content"[cite: 2]
+// @Security		BearerAuth
+// @Security		BearerAuth
+// @Param        full_name      formData  string  false "Updated full identity name representation"
+// @Param        phone          formData  string  false "Target telecommunications contact identity sequence"
+// @Param        photo          formData  file    false "Binary source file image attachment content"
 // @Success      200            {object}  dto.Response{data=object}
 // @Failure      400            {object}  dto.Response{error}
 // @Failure      401            {object}  dto.Response{error}
@@ -152,6 +155,7 @@ func (p *ProfileController) EditProfile(ctx *gin.Context) {
 // @Tags         Profile
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Param        body           body      dto.SetPinRequest  true  "PIN update payload"
 // @Success      200            {object}  dto.Response{data=object}
 // @Failure      400            {object}  dto.Response{error}
@@ -187,10 +191,11 @@ func (p *ProfileController) EditPin(ctx *gin.Context) {
 
 // EditPassword godoc
 // @Summary      Modify security entry password credentials
-// @Description  Modifies internal account validation strings. Requires old confirmation verification strings[cite: 2].
+// @Description  Modifies internal account validation strings. Requires old confirmation verification strings.
 // @Tags         Profile
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Param        body           body      dto.ChangePasswordRequest  true  "Password structure swap payload"
 // @Success      200            {object}  dto.Response{data=object}
 // @Failure      400            {object}  dto.Response{error}
@@ -226,10 +231,11 @@ func (p *ProfileController) EditPassword(ctx *gin.Context) {
 
 // GetUserInfo godoc
 // @Summary      Get unified system user statistics context
-// @Description  Assembles structured systemic components including identities, security states, and financial metrics[cite: 2].
+// @Description  Assembles structured systemic components including identities, security states, and financial metrics.
 // @Tags         Profile
 // @Accept       json
 // @Produce      json
+// @Security		BearerAuth
 // @Success      200            {object}  dto.Response{data=dto.UserInfoResponse}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
