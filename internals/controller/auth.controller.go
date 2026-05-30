@@ -187,3 +187,41 @@ func (a *AuthController) VerifyPIN(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, dto.NewSuccessNoData("PIN verified successfully"))
 }
+
+// Reset godoc
+// @Summary      Register a new systemic user entity
+// @Description  Creates an absolute identity space record within the backend infrastructure dataset[cite: 3].
+// @Tags         Authentication
+// @Accept       json
+// @Produce      json
+// @Security		BearerAuth
+// @Param        body  body      dto.ResetPasswordRequest  true  "Token generated identification credentials payload"
+// @Success      201   {object}  dto.Response{data=string}
+// @Failure      400   {object}  dto.Response{error}
+// @Failure      409   {object}  dto.Response{error}
+// @Failure      500   {object}  dto.Response{error}
+// @Router       /auth/reset [post]
+func (a *AuthController) ResetPassword(ctx *gin.Context) {
+	var body dto.ResetPasswordRequest
+
+	if err := ctx.ShouldBindBodyWithJSON(&body); err != nil {
+		log.Printf("[AuthController.Register] bind error: %v\n", err)
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request payload", "Please ensure your input matches the required format"))
+		return
+	}
+	token, err := a.authservice.ResetPassword(ctx.Request.Context(), body)
+	if err != nil {
+		log.Printf("[AuthController.ResetPassword] service error: %v\n", err)
+		status := http.StatusInternalServerError
+		errDetail := "Internal server error"
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate") || strings.Contains(strings.ToLower(err.Error()), "unique") {
+			status = http.StatusConflict
+			errDetail = "Email already exists"
+		}
+		ctx.JSON(status, dto.NewError("Registration failed", errDetail))
+		return
+	}
+
+	ctx.JSON(http.StatusCreated, dto.NewSuccess("Token generated", token))
+
+}

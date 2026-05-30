@@ -131,3 +131,30 @@ func (a *Authrepo) IsTokenValid(ctx context.Context, rawToken string) (bool, err
 	}
 	return valid, nil
 }
+
+func (a *Authrepo) GetTokenByEmail(ctx context.Context, email string) (string, error) {
+	var token string
+
+	query := `
+		SELECT t.token 
+		FROM tokens t
+		JOIN users u ON t.user_id = u.id
+		WHERE u.email = $1
+		  AND type = EMAIL_VERIFICATION
+		  AND t.is_revoked = false
+		  AND t.expires_at > now()
+		ORDER BY created_at DESC 
+		LIMIT 1;
+	`
+
+	err := a.db.QueryRow(ctx, query, email).Scan(&token)
+	if err != nil {
+		// It's good practice to handle the "no rows found" case specifically
+		if errors.Is(err, pgx.ErrNoRows) { // or sql.ErrNoRows depending on your driver
+			return "", nil // Or return a custom error like ErrTokenNotFound
+		}
+		return "", fmt.Errorf("GetTokenByEmail: %w", err)
+	}
+
+	return token, nil
+}

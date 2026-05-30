@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"log"
 	"time"
@@ -17,6 +18,7 @@ type AuthRepo interface {
 	Register(ctx context.Context, email, password string) (model.User, error)
 	Login(ctx context.Context, email string) (model.User, error)
 	GetUserPin(ctx context.Context, email string) (model.UserPin, error)
+	GetTokenByEmail(ctx context.Context, email string) (string, error)
 	SaveToken(ctx context.Context, userID, rawToken string, tokenType model.TokenType, expiresAt time.Time) error
 	RevokeToken(ctx context.Context, rawToken string) error
 	IsTokenValid(ctx context.Context, rawToken string) (bool, error)
@@ -70,6 +72,37 @@ func (a *AuthService) Login(ctx context.Context, user dto.LoginRequest) (string,
 	}
 
 	return token, nil
+}
+
+func (a *AuthService) ResetPassword(ctx context.Context, user dto.ResetPasswordRequest) (string, error) {
+	login, err := a.getOrFetchUser(ctx, user.Email)
+	if err != nil {
+		return "", err
+	}
+	token := rand.Text()
+
+	expiresAt := time.Now().Add(5 * time.Minute)
+	if err := a.authRepo.SaveToken(
+		ctx,
+		login.ID.String(),
+		token,
+		model.TokenTypeEmailVerification,
+		expiresAt,
+	); err != nil {
+		return "", err
+	}
+
+	return token, nil
+}
+
+func (a *AuthService) ConfirmResetPassword(ctx context.Context, user dto.ConfirmResetPassword) (bool, error) {
+	token, err := a.authRepo.GetTokenByEmail(ctx, user.Email)
+	if err != nil {
+		return false, err
+	}
+	valid := token == user.Token
+
+	return valid, err
 }
 
 func (a *AuthService) getOrFetchUser(ctx context.Context, email string) (*model.User, error) {

@@ -24,6 +24,7 @@ func AuthRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) {
 	// Protected
 	protected := auth.Group("/", middleware.VerifyTokenWithDB(db))
 	protected.POST("/logout", authCont.Logout)
+	protected.POST("/reset", authCont.ResetPassword)
 	protected.GET("/pin", authCont.GetPIN)
 	protected.POST("/pin/verify", authCont.VerifyPIN)
 }

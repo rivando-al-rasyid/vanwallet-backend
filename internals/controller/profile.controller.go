@@ -108,7 +108,7 @@ func (p *ProfileController) validateAndSavePhoto(ctx *gin.Context, photo *multip
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      422            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
-// @Router       /profile/edit [put]
+// @Router       /profile/edit [PATCH]
 func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
@@ -161,7 +161,7 @@ func (p *ProfileController) EditProfile(ctx *gin.Context) {
 // @Failure      400            {object}  dto.Response{error}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
-// @Router       /profile/change/pin [post]
+// @Router       /profile/change/pin [PATCH]
 func (p *ProfileController) EditPin(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
@@ -201,8 +201,9 @@ func (p *ProfileController) EditPin(ctx *gin.Context) {
 // @Failure      400            {object}  dto.Response{error}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
-// @Router       /profile/password [put]
+// @Router       /profile/password [PATCH]
 func (p *ProfileController) EditPassword(ctx *gin.Context) {
+
 	claims, exists := ctx.Get("claims")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))

@@ -14,6 +14,14 @@ type LoginRequest struct {
 	Email    string `json:"email"    binding:"required,email" example:"user@example.com"`
 	Password string `json:"password" binding:"required"       example:"P@ssw0rd123"`
 }
+type ResetPasswordRequest struct {
+	Email string `json:"email"    binding:"required,email" example:"user@example.com"`
+}
+
+type ConfirmResetPassword struct {
+	Email string `json:"email"    binding:"required,email" example:"user@example.com"`
+	Token string `json:"token"    binding:"required,Token"`
+}
 
 // UserResponse is the public representation after register/login.
 type UserResponse struct {
