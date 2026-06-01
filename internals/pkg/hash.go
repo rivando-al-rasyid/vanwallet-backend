@@ -19,15 +19,6 @@ type HashConfig struct {
 	SaltLen uint32
 }
 
-func NewHashConfig(memory, time uint32, threads uint8, keylen, saltlen uint32) *HashConfig {
-	return &HashConfig{
-		Memory:  memory,
-		Time:    time,
-		Threads: threads,
-		KeyLen:  keylen,
-		SaltLen: saltlen,
-	}
-}
 
 func (h *HashConfig) UseRecommended() {
 	// based on OWASP min recommendation (May 2023)

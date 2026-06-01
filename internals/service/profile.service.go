@@ -42,12 +42,6 @@ func (s *ProfileService) EditProfile(ctx context.Context, email string, updates 
 	return s.repo.EditProfile(ctx, email, updates)
 }
 
-func (s *ProfileService) EditPin(ctx context.Context, email string, newPin string) (model.UserPin, error) {
-	var hc pkg.HashConfig
-	hc.UseRecommended()
-	hashedPin := hc.GenHash(newPin)
-	return s.repo.EditPin(ctx, email, hashedPin)
-}
 
 func (s *ProfileService) EditPinWithAuth(ctx context.Context, email, oldPin, newPin string) (model.UserPin, error) {
 	currentPin, err := s.repo.GetCurrentPinHash(ctx, email)
