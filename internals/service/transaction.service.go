@@ -33,9 +33,8 @@ type TransactionService struct {
 	rdb  *redis.Client
 }
 
-func NewTransactionService(repo TransactionRepository) *TransactionService {
-	return &TransactionService{repo: repo}
-
+func NewTransactionService(repo TransactionRepository, rdb *redis.Client) *TransactionService {
+	return &TransactionService{repo: repo, rdb: rdb}
 }
 
 // VerifyPIN checks the stored argon2 PIN hash against rawPin before committing any sensitive operation.
@@ -62,10 +61,14 @@ func (s *TransactionService) GetAllTransactions(ctx context.Context, email strin
 func (s *TransactionService) GetAllHistory(ctx context.Context, email string, page, limit int) ([]model.HistoryItem, int, error) {
 	rkey := fmt.Sprintf("vando:history:%s:p%d:l%d", email, page, limit)
 
-	var history []model.HistoryItem
-	if err := cache.GetFromCache(ctx, s.rdb, rkey, &history); err == nil {
+	type cacheEntry struct {
+		Items []model.HistoryItem `json:"items"`
+		Total int                 `json:"total"`
+	}
+	var entry cacheEntry
+	if err := cache.GetFromCache(ctx, s.rdb, rkey, &entry); err == nil {
 		log.Println("cache hit:", email)
-		return history, len(history), nil
+		return entry.Items, entry.Total, nil
 	} else if !errors.Is(err, redis.Nil) {
 		log.Println("redis error:", err)
 	}
@@ -77,7 +80,7 @@ func (s *TransactionService) GetAllHistory(ctx context.Context, email string, pa
 		return nil, 0, err
 	}
 
-	if err := cache.SaveToCache(ctx, s.rdb, rkey, fetched); err != nil {
+	if err := cache.SaveToCache(ctx, s.rdb, rkey, cacheEntry{Items: fetched, Total: total}); err != nil {
 		log.Println("cache save error:", err)
 	}
 

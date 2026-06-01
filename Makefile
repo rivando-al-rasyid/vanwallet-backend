@@ -29,6 +29,10 @@ seed-reset:
 		"TRUNCATE TABLE withdrawals, expenses, transfers, transactions, topups, wallets, user_pins, favorites, profiles, users RESTART IDENTITY CASCADE;"
 	@$(MAKE) seed
 
+docker-up: 
+	@docker compose up -d --build
+docker-down: 
+	@docker compose down -v
 # ── Misc ───────────────────────────────────────────────────────────────────
 print-db-url:
 	@echo $(DATABASE_URL)
