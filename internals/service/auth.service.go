@@ -18,10 +18,11 @@ type AuthRepo interface {
 	Register(ctx context.Context, email, password string) (model.User, error)
 	Login(ctx context.Context, email string) (model.User, error)
 	GetUserPin(ctx context.Context, email string) (model.UserPin, error)
-	GetTokenByEmail(ctx context.Context, email string) (string, error)
+	GetUserByResetToken(ctx context.Context, rawToken string) (model.User, error)
 	SaveToken(ctx context.Context, userID, rawToken string, tokenType model.TokenType, expiresAt time.Time) error
 	RevokeToken(ctx context.Context, rawToken string) error
 	IsTokenValid(ctx context.Context, rawToken string) (bool, error)
+	UpdatePassword(ctx context.Context, userID, hashedPassword string) error
 }
 
 type AuthService struct {
@@ -86,7 +87,7 @@ func (a *AuthService) ResetPassword(ctx context.Context, user dto.ResetPasswordR
 		ctx,
 		login.ID.String(),
 		token,
-		model.TokenTypeEmailVerification,
+		model.TokenTypePasswordReset,
 		expiresAt,
 	); err != nil {
 		return "", err
@@ -95,14 +96,32 @@ func (a *AuthService) ResetPassword(ctx context.Context, user dto.ResetPasswordR
 	return token, nil
 }
 
-func (a *AuthService) ConfirmResetPassword(ctx context.Context, user dto.ConfirmResetPassword) (bool, error) {
-	token, err := a.authRepo.GetTokenByEmail(ctx, user.Email)
+func (a *AuthService) ConfirmResetPassword(ctx context.Context, user dto.ConfirmResetPassword) (string, error) {
+	// Validate + single-use revoke in one atomic DB call
+	foundUser, err := a.authRepo.GetUserByResetToken(ctx, user.Token)
 	if err != nil {
-		return false, err
+		return "", err
 	}
-	valid := token == user.Token
 
-	return valid, err
+	// Issue a short-lived JWT scoped exclusively for the change-password endpoint
+	claims := pkg.NewResetClaims(foundUser.ID, foundUser.Email)
+	resetJWT, err := claims.GenJWT()
+	if err != nil {
+		return "", err
+	}
+
+	return resetJWT, nil
+}
+
+// ChangeResetPassword hashes newPassword and persists it for the user identified by
+// the password-reset JWT claims. The JWT was already validated (and the opaque
+// reset token already revoked) in ConfirmResetPassword, so no extra token check
+// is needed here.
+func (a *AuthService) ChangeResetPassword(ctx context.Context, userID, newPassword string) error {
+	var hc pkg.HashConfig
+	hc.UseRecommended()
+	hashed := hc.GenHash(newPassword)
+	return a.authRepo.UpdatePassword(ctx, userID, hashed)
 }
 
 func (a *AuthService) getOrFetchUser(ctx context.Context, email string) (*model.User, error) {
@@ -138,11 +157,6 @@ func (a *AuthService) Logout(ctx context.Context, rawToken, email string) error 
 		log.Println("cache evict error on logout:", err) // non-fatal
 	}
 	return nil
-}
-
-// IsTokenValid checks the tokens table.
-func (a *AuthService) IsTokenValid(ctx context.Context, rawToken string) (bool, error) {
-	return a.authRepo.IsTokenValid(ctx, rawToken)
 }
 
 func (a *AuthService) GetUserPin(ctx context.Context, email string) (model.UserPin, error) {

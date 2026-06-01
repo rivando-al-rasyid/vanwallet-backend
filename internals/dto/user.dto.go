@@ -14,13 +14,21 @@ type LoginRequest struct {
 	Email    string `json:"email"    binding:"required,email" example:"user@example.com"`
 	Password string `json:"password" binding:"required"       example:"P@ssw0rd123"`
 }
+
 type ResetPasswordRequest struct {
-	Email string `json:"email"    binding:"required,email" example:"user@example.com"`
+	Email string `json:"email" binding:"required,email" example:"user@example.com"`
 }
 
 type ConfirmResetPassword struct {
-	Email string `json:"email"    binding:"required,email" example:"user@example.com"`
-	Token string `json:"token"    binding:"required,Token"`
+	Email       string `json:"email" binding:"required,email" example:"user@example.com"`
+	Token       string `json:"token" binding:"required"       example:"abc123xyz"`
+	NewPassword string `json:"password" binding:"required"       example:"P@ssw0rd123"`
+}
+
+// ChangePasswordRequest is the payload for POST /auth/change-password.
+// Requires a valid password-reset JWT (sub="password-reset") in the Authorization header.
+type ChangeAndPasswordRequest struct {
+	NewPassword string `json:"new_password" binding:"required,min=8" example:"NewP@ssw0rd!" minLength:"8"`
 }
 
 // UserResponse is the public representation after register/login.

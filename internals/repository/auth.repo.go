@@ -90,7 +90,6 @@ func (a *Authrepo) GetUserPin(ctx context.Context, email string) (model.UserPin,
 }
 
 // SaveToken inserts a new token row into the tokens table.
-// tokenType should be model.TokenTypeRefresh for login-issued access tokens.
 func (a *Authrepo) SaveToken(ctx context.Context, userID, rawToken string, tokenType model.TokenType, expiresAt time.Time) error {
 	_, err := a.db.Exec(ctx,
 		`INSERT INTO tokens (user_id, token, type, expires_at)
@@ -104,7 +103,7 @@ func (a *Authrepo) SaveToken(ctx context.Context, userID, rawToken string, token
 	return nil
 }
 
-// RevokeToken marks a specific token as revoked (logout current device).
+// RevokeToken marks a specific token as revoked.
 func (a *Authrepo) RevokeToken(ctx context.Context, rawToken string) error {
 	_, err := a.db.Exec(ctx,
 		`UPDATE tokens SET is_revoked = true WHERE token = $1`, rawToken,
@@ -132,29 +131,52 @@ func (a *Authrepo) IsTokenValid(ctx context.Context, rawToken string) (bool, err
 	return valid, nil
 }
 
-func (a *Authrepo) GetTokenByEmail(ctx context.Context, email string) (string, error) {
-	var token string
+// GetUserByResetToken validates that rawToken is a live PASSWORD_RESET token and
+// returns the associated user. The token is revoked immediately (single-use) so
+// it cannot be replayed.
+func (a *Authrepo) GetUserByResetToken(ctx context.Context, rawToken string) (model.User, error) {
+	var user model.User
 
-	query := `
-		SELECT t.token 
+	err := a.db.QueryRow(ctx, `
+		SELECT u.id, u.email
 		FROM tokens t
 		JOIN users u ON t.user_id = u.id
-		WHERE u.email = $1
-		  AND type = EMAIL_VERIFICATION
+		WHERE t.token     = $1
+		  AND t.type      = $2
 		  AND t.is_revoked = false
 		  AND t.expires_at > now()
-		ORDER BY created_at DESC 
-		LIMIT 1;
-	`
-
-	err := a.db.QueryRow(ctx, query, email).Scan(&token)
+		LIMIT 1
+	`, rawToken, model.TokenTypePasswordReset,
+	).Scan(&user.ID, &user.Email)
 	if err != nil {
-		// It's good practice to handle the "no rows found" case specifically
-		if errors.Is(err, pgx.ErrNoRows) { // or sql.ErrNoRows depending on your driver
-			return "", nil // Or return a custom error like ErrTokenNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.User{}, errors.New("invalid or expired reset token")
 		}
-		return "", fmt.Errorf("GetTokenByEmail: %w", err)
+		return model.User{}, fmt.Errorf("GetUserByResetToken: %w", err)
 	}
 
-	return token, nil
+	// Revoke immediately — single-use token
+	if _, err = a.db.Exec(ctx,
+		`UPDATE tokens SET is_revoked = true WHERE token = $1`, rawToken,
+	); err != nil {
+		return model.User{}, fmt.Errorf("GetUserByResetToken revoke: %w", err)
+	}
+
+	return user, nil
+}
+
+
+// UpdatePassword sets a new hashed password for the given user ID.
+func (a *Authrepo) UpdatePassword(ctx context.Context, userID, hashedPassword string) error {
+	result, err := a.db.Exec(ctx,
+		`UPDATE users SET password = $1 ,updated_at = NOW() WHERE id = $2`,
+		hashedPassword, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("UpdatePassword: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return errors.New("user not found")
+	}
+	return nil
 }

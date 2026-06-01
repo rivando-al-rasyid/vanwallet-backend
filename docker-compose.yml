@@ -1,0 +1,80 @@
+services:
+  # ── Application ───────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vanwallet_app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Server
+      GIN_MODE: release
+      # PostgreSQL
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      # Redis
+      RDB_ADDR: redis:6379
+      RDB_USER: ${RDB_USER:-}
+      RDB_PASS: ${RDB_PASS:-}
+      # JWT
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - vanwallet_net
+
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    container_name: vanwallet_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vanwallet_net
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:8.8-alpine3.23
+    container_name: vanwallet_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+        --requirepass ${RDB_PASS:-}
+        --save 60 1
+        --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${RDB_PASS:-}", "--no-auth-warning", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vanwallet_net
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  vanwallet_net:
+    driver: bridge

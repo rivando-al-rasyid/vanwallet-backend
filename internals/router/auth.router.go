@@ -17,14 +17,20 @@ func AuthRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) {
 
 	auth := router.Group("/auth")
 
-	// Public
+	// Public — no token required
 	auth.POST("/register", authCont.Register)
 	auth.POST("/login", authCont.Login)
+	auth.POST("/reset", authCont.ResetPassword)
+	auth.POST("/reset/confirm", authCont.ConfirmResetPassword)
 
-	// Protected
+	// Protected with normal access token
 	protected := auth.Group("/", middleware.VerifyTokenWithDB(db))
 	protected.POST("/logout", authCont.Logout)
-	protected.POST("/reset", authCont.ResetPassword)
 	protected.GET("/pin", authCont.GetPIN)
 	protected.POST("/pin/verify", authCont.VerifyPIN)
+
+	// Protected with password-reset JWT (sub="password-reset", 10 min)
+	// Client must attach the JWT returned by POST /auth/reset/confirm
+	resetProtected := auth.Group("/", middleware.VerifyResetToken())
+	resetProtected.POST("/change-password", authCont.ChangePassword)
 }
