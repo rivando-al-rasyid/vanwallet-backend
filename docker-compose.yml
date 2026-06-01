@@ -1,42 +1,57 @@
 services:
-
-  # ── Application ───────────────────────────────────────────────────────────
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     container_name: vanwallet_app
     restart: unless-stopped
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
-      # Server
-      GIN_MODE: release
-      # PostgreSQL
-      DB_USER: ${DB_USER}
-      DB_PASS: ${DB_PASS}
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8080
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: ${DB_NAME}
-      # Redis
       RDB_ADDR: redis:6379
-      RDB_PASS: ${RDB_PASS:-}
-      # JWT
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_ISSUER: ${JWT_ISSUER}
+      GIN_MODE: release
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:                          
+        condition: service_completed_successfully
     networks:
       - vanwallet_net
 
-  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  # ----------------------------------------------
+  # NEW: Auto-run database migrations once
+  # ----------------------------------------------
+  migrate:
+    image: migrate/migrate
+    container_name: vanwallet_migrate
+    env_file:
+      - .env                           # reads DB_USER, DB_PASS, DB_NAME
+    volumes:
+      - ./database/migrations:/migrations   # bind your local migration files
+    command: [
+      "-database",
+      "postgresql://${DB_USER}:${DB_PASS}@postgres:5432/${DB_NAME}?sslmode=disable",
+      "-path", "/migrations",
+      "up"
+    ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - vanwallet_net
+
   postgres:
     image: postgres:17-alpine
     container_name: vanwallet_postgres
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASS}
@@ -44,28 +59,24 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 5s
+      timeout: 3s
       retries: 5
-      start_period: 10s
     networks:
       - vanwallet_net
 
-  # ── Redis ──────────────────────────────────────────────────────────────────
   redis:
-    image: redis:8.8-alpine3.23
+    image: redis:alpine
     container_name: vanwallet_redis
     restart: unless-stopped
-    command: ["redis-server", "--requirepass", "${RDB_PASS:-}", "--save", "60", "1", "--loglevel", "warning"]
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli $([ -n \"$$RDB_PASS\" ] && echo \"-a $$RDB_PASS --no-auth-warning\") ping"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
       retries: 5
-      start_period: 5s
     networks:
       - vanwallet_net
 
@@ -75,4 +86,3 @@ volumes:
 
 networks:
   vanwallet_net:
-    driver: bridge
