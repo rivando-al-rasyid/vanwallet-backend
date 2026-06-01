@@ -44,7 +44,7 @@ func (a *Authrepo) Register(ctx context.Context, email, hashpwd string) (model.U
 	}
 
 	if _, err = tx.Exec(ctx,
-		`INSERT INTO user_pins (user_id, pin_hash) VALUES ($1, '')`, user.ID,
+		`INSERT INTO user_pins (user_id, pin_hash) VALUES ($1, NULL)`, user.ID,
 	); err != nil {
 		return model.User{}, fmt.Errorf("Register insert user_pin: %w", err)
 	}

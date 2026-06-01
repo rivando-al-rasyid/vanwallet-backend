@@ -20,12 +20,12 @@ func NewAuthController(authservice *service.AuthService) *AuthController {
 }
 
 // Register godoc
-// @Summary      Register a new systemic user entity
-// @Description  Creates an absolute identity space record within the backend infrastructure dataset.
+// @Summary      Register a new user
+// @Description  Creates a new user account along with a profile, wallet, and PIN record.
 // @Tags         Authentication
 // @Accept       json
 // @Produce      json
-// @Param        body  body      dto.RegisterRequest  true  "Sign up identification credentials payload"
+// @Param        body  body      dto.RegisterRequest  true  "Registration credentials"
 // @Success      201   {object}  dto.Response{data=dto.UserResponse}
 // @Failure      400   {object}  dto.Response{error}
 // @Failure      409   {object}  dto.Response{error}
@@ -56,12 +56,12 @@ func (a *AuthController) Register(ctx *gin.Context) {
 }
 
 // Login godoc
-// @Summary      Authenticate profile session token
-// @Description  Verifies credentials and issues a signed JWT.
+// @Summary      Login
+// @Description  Verifies email and password, then issues a signed JWT access token.
 // @Tags         Authentication
 // @Accept       json
 // @Produce      json
-// @Param        body  body      dto.LoginRequest  true  "Identity access block data definitions"
+// @Param        body  body      dto.LoginRequest  true  "Login credentials"
 // @Success      200   {object}  dto.Response{data=string}
 // @Failure      400   {object}  dto.Response{error}
 // @Failure      401   {object}  dto.Response{error}
@@ -85,8 +85,8 @@ func (a *AuthController) Login(ctx *gin.Context) {
 }
 
 // Logout godoc
-// @Summary      Terminates system session tokens
-// @Description  Revokes the current access token.
+// @Summary      Logout
+// @Description  Revokes the current access token, invalidating the session.
 // @Tags         Authentication
 // @Accept       json
 // @Produce      json
@@ -119,8 +119,8 @@ func (a *AuthController) Logout(ctx *gin.Context) {
 }
 
 // GetPIN godoc
-// @Summary      Get internal system PIN hash sequence
-// @Description  Fetches the PIN configuration status for the authenticated user.
+// @Summary      Get PIN status
+// @Description  Returns whether a transaction PIN has been set for the authenticated user.
 // @Tags         Authentication
 // @Accept       json
 // @Produce      json
@@ -155,13 +155,13 @@ func (a *AuthController) GetPIN(ctx *gin.Context) {
 }
 
 // VerifyPIN godoc
-// @Summary      Verify validity of PIN entry blocks
+// @Summary      Verify transaction PIN
 // @Description  Validates the transaction PIN for the authenticated user.
 // @Tags         Authentication
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        body  body      dto.VerifyPinRequest  true  "Pin validation request"
+// @Param        body  body      dto.VerifyPinRequest  true  "PIN to verify"
 // @Success      200   {object}  dto.Response{data=object}
 // @Failure      400   {object}  dto.Response{error}
 // @Failure      401   {object}  dto.Response{error}
@@ -190,11 +190,11 @@ func (a *AuthController) VerifyPIN(ctx *gin.Context) {
 
 // ResetPassword godoc
 // @Summary      Request a password reset token
-// @Description  Looks up the account by email and stores a short-lived PASSWORD_RESET token (5 min). Send this token to the user via email/SMS. The token is then exchanged at POST /auth/reset/confirm.
+// @Description  Looks up the account by email and stores a short-lived PASSWORD_RESET token (5 min). Deliver this token to the user via email or SMS, then exchange it at POST /auth/reset/confirm.
 // @Tags         Authentication
 // @Accept       json
 // @Produce      json
-// @Param        body  body      dto.ResetPasswordRequest  true  "Email address"
+// @Param        body  body      dto.ResetPasswordRequest  true  "Registered email address"
 // @Success      201   {object}  dto.Response{data=string}
 // @Failure      400   {object}  dto.Response{error}
 // @Failure      404   {object}  dto.Response{error}
@@ -220,11 +220,11 @@ func (a *AuthController) ResetPassword(ctx *gin.Context) {
 
 // ConfirmResetPassword godoc
 // @Summary      Confirm reset token and obtain a password-reset JWT
-// @Description  Validates the opaque PASSWORD_RESET token (issued by POST /auth/reset), revokes it (single-use), and returns a short-lived JWT (10 min, sub="password-reset"). Attach this JWT as a Bearer token when calling POST /auth/change-password.
+// @Description  Validates the opaque PASSWORD_RESET token issued by POST /auth/reset, revokes it (single-use), and returns a short-lived JWT (10 min, sub="password-reset"). Use this JWT as a Bearer token when calling POST /auth/change-password.
 // @Tags         Authentication
 // @Accept       json
 // @Produce      json
-// @Param        body  body      dto.ConfirmResetPassword  true  "Email and opaque reset token"
+// @Param        body  body      dto.ConfirmResetPassword  true  "Reset token (from email/SMS)"
 // @Success      200   {object}  dto.Response{data=string}
 // @Failure      400   {object}  dto.Response{error}
 // @Failure      401   {object}  dto.Response{error}
@@ -257,7 +257,7 @@ func (a *AuthController) ConfirmResetPassword(ctx *gin.Context) {
 
 // ChangePassword godoc
 // @Summary      Set a new password using a password-reset JWT
-// @Description  Replaces the user's password. Requires the short-lived JWT returned by POST /auth/reset/confirm in the Authorization header (sub must be "password-reset"). The JWT is already single-use by design (the opaque reset token was revoked on confirm).
+// @Description  Replaces the user's password. Requires the short-lived JWT returned by POST /auth/reset/confirm as a Bearer token (sub must be "password-reset").
 // @Tags         Authentication
 // @Accept       json
 // @Produce      json
@@ -278,13 +278,13 @@ func (a *AuthController) ChangePassword(ctx *gin.Context) {
 
 	var body dto.ChangeAndPasswordRequest
 	if err := ctx.ShouldBindBodyWithJSON(&body); err != nil {
-		log.Printf("[AuthController.ChangeAndPasswordRequest] bind error: %v\n", err)
+		log.Printf("[AuthController.ChangePassword] bind error: %v\n", err)
 		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request payload", "Please ensure your input matches the required format"))
 		return
 	}
 
 	if err := a.authservice.ChangeResetPassword(ctx.Request.Context(), claims.ID.String(), body.NewPassword); err != nil {
-		log.Printf("[AuthController.ChangeAndPasswordRequest] service error: %v\n", err)
+		log.Printf("[AuthController.ChangePassword] service error: %v\n", err)
 		ctx.JSON(http.StatusInternalServerError, dto.NewError("Change password failed", "Internal server error"))
 		return
 	}

@@ -19,9 +19,10 @@ type ResetPasswordRequest struct {
 	Email string `json:"email" binding:"required,email" example:"user@example.com"`
 }
 
+// ConfirmResetPassword is the payload for POST /auth/reset/confirm.
+// Only the opaque token is needed — the user is identified via the token's DB record.
 type ConfirmResetPassword struct {
-	Email string `json:"email" binding:"required,email" example:"user@example.com"`
-	Token string `json:"token" binding:"required"       example:"abc123xyz"`
+	Token string `json:"token" binding:"required" example:"abc123xyz"`
 }
 
 // ChangePasswordRequest is the payload for POST /auth/change-password.

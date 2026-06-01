@@ -49,7 +49,7 @@ func (s *ProfileService) EditPinWithAuth(ctx context.Context, email, oldPin, new
 		return model.UserPin{}, err
 	}
 
-	// First-time setup: pin_hash is empty string
+	// First-time setup: pin_hash is NULL (scanned as empty string)
 	if currentPin != "" {
 		// Changing existing PIN → require old_pin verification
 		if oldPin == "" {

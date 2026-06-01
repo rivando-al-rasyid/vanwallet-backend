@@ -19,30 +19,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      migrate:                          
-        condition: service_completed_successfully
-    networks:
-      - vanwallet_net
-
-  # ----------------------------------------------
-  # NEW: Auto-run database migrations once
-  # ----------------------------------------------
-  migrate:
-    image: migrate/migrate
-    container_name: vanwallet_migrate
-    env_file:
-      - .env                           # reads DB_USER, DB_PASS, DB_NAME
-    volumes:
-      - ./database/migrations:/migrations   # bind your local migration files
-    command: [
-      "-database",
-      "postgresql://${DB_USER}:${DB_PASS}@postgres:5432/${DB_NAME}?sslmode=disable",
-      "-path", "/migrations",
-      "up"
-    ]
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks:
       - vanwallet_net
 
@@ -56,10 +32,12 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASS}
       POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 3s
       retries: 5
