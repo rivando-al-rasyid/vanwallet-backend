@@ -97,7 +97,6 @@ func (a *AuthService) ResetPassword(ctx context.Context, user dto.ResetPasswordR
 }
 
 func (a *AuthService) ConfirmResetPassword(ctx context.Context, user dto.ConfirmResetPassword) (string, error) {
-	// Validate + single-use revoke in one atomic DB call
 	foundUser, err := a.authRepo.GetUserByResetToken(ctx, user.Token)
 	if err != nil {
 		return "", err

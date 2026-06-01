@@ -20,9 +20,8 @@ type ResetPasswordRequest struct {
 }
 
 type ConfirmResetPassword struct {
-	Email       string `json:"email" binding:"required,email" example:"user@example.com"`
-	Token       string `json:"token" binding:"required"       example:"abc123xyz"`
-	NewPassword string `json:"password" binding:"required"       example:"P@ssw0rd123"`
+	Email string `json:"email" binding:"required,email" example:"user@example.com"`
+	Token string `json:"token" binding:"required"       example:"abc123xyz"`
 }
 
 // ChangePasswordRequest is the payload for POST /auth/change-password.

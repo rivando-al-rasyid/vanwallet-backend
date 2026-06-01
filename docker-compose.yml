@@ -1,4 +1,5 @@
 services:
+
   # ── Application ───────────────────────────────────────────────────────────
   app:
     build:
@@ -19,7 +20,6 @@ services:
       DB_NAME: ${DB_NAME}
       # Redis
       RDB_ADDR: redis:6379
-      RDB_USER: ${RDB_USER:-}
       RDB_PASS: ${RDB_PASS:-}
       # JWT
       JWT_SECRET: ${JWT_SECRET}
@@ -44,10 +44,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     networks:
       - vanwallet_net
 
@@ -56,18 +57,15 @@ services:
     image: redis:8.8-alpine3.23
     container_name: vanwallet_redis
     restart: unless-stopped
-    command: >
-      redis-server
-        --requirepass ${RDB_PASS:-}
-        --save 60 1
-        --loglevel warning
+    command: ["redis-server", "--requirepass", "${RDB_PASS:-}", "--save", "60", "1", "--loglevel", "warning"]
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${RDB_PASS:-}", "--no-auth-warning", "ping"]
+      test: ["CMD-SHELL", "redis-cli $([ -n \"$$RDB_PASS\" ] && echo \"-a $$RDB_PASS --no-auth-warning\") ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 5s
     networks:
       - vanwallet_net
 

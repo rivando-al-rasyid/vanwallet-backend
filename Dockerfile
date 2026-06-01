@@ -1,9 +1,9 @@
 # ─────────────────────────────────────────────
 # Stage 1 — Build
 # ─────────────────────────────────────────────
-FROM golang:1.26.3-alpine3.22 AS builder
+FROM golang:1.26.3-alpine3.23 AS builder
 
-# Install build tools needed by cgo-free pgx and git for `go mod download`
+# git is required for go mod download
 RUN apk add --no-cache git
 
 WORKDIR /app
@@ -22,14 +22,14 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 # ─────────────────────────────────────────────
 # Stage 2 — Runtime
 # ─────────────────────────────────────────────
-FROM alpine:3.22
+FROM alpine:3.23
 
 # ca-certificates for any TLS outbound calls; tzdata for proper timestamps
 RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
-
 # Copy binary from builder
+COPY .env .env
 COPY --from=builder /app/vanwallet .
 
 # Copy static assets served at /img
