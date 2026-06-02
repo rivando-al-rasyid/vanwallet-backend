@@ -1,5 +1,7 @@
 include ./.env
 
+
+
 MIGRATION_PATH=database/migrations
 SEED_FILE=database/seed.sql
 DATABASE_URL=postgresql://$(DB_USER):$(DB_PASS)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable
@@ -33,6 +35,12 @@ docker-up:
 	@docker compose up -d --build
 docker-down: 
 	@docker compose down -v
+docker-ps: 
+	@docker compose ps
+
+docker-logs: 
+	@docker compose logs app
+
 # ── Misc ───────────────────────────────────────────────────────────────────
 print-db-url:
 	@echo $(DATABASE_URL)
