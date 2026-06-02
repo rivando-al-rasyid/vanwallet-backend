@@ -1,7 +1,9 @@
 name: Build and Publish to GHCR
 on:
   push:
-    branches: main
+    branches:
+      - main
+      - develoment
 jobs:
   Build-And-Publish:
     runs-on: ubuntu-latest
