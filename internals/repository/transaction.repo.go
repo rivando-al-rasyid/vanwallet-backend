@@ -503,41 +503,83 @@ func (t *TransactionRepo) CreateExpense(ctx context.Context, walletID uuid.UUID,
 }
 
 // SearchReceivers searches users by full_name or phone for the transfer flow.
-func (t *TransactionRepo) SearchReceivers(ctx context.Context, callerEmail, query string, page, limit int) ([]model.ReceiverResult, int, error) {
+func (t *TransactionRepo) SearchReceivers(
+	ctx context.Context,
+	callerEmail,
+	query string,
+	page,
+	limit int,
+) ([]model.ReceiverResult, int, error) {
+
 	offset := (page - 1) * limit
 	like := "%" + query + "%"
+
 	var total int
-	if err := t.db.QueryRow(ctx, `
-		SELECT COUNT(*) FROM users u
+
+	countSQL := `
+		SELECT COUNT(*)
+		FROM users u
 		JOIN profiles p ON p.user_id = u.id
-		JOIN wallets  w ON w.user_id = u.id
-		WHERE u.email != $1 AND (p.full_name ILIKE $2 OR p.phone ILIKE $2)`,
-		callerEmail, like,
-	).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("SearchReceivers count: %w", err)
-	}
-	rows, err := t.db.Query(ctx, `
+		JOIN wallets w ON w.user_id = u.id
+		WHERE u.email != $1
+	`
+
+	dataSQL := `
 		SELECT u.id, u.email, p.full_name, p.phone, p.photo, w.id, w.label
 		FROM users u
 		JOIN profiles p ON p.user_id = u.id
-		JOIN wallets  w ON w.user_id = u.id
-		WHERE u.email != $1 AND (p.full_name ILIKE $2 OR p.phone ILIKE $2)
-		ORDER BY p.full_name ASC NULLS LAST
-		LIMIT $3 OFFSET $4`,
-		callerEmail, like, limit, offset,
-	)
+		JOIN wallets w ON w.user_id = u.id
+		WHERE u.email != $1
+	`
+
+	args := []any{callerEmail}
+
+	if query != "" {
+		countSQL += ` AND (p.full_name ILIKE $2 OR p.phone ILIKE $2)`
+		dataSQL += ` AND (p.full_name ILIKE $2 OR p.phone ILIKE $2)`
+		args = append(args, like)
+	}
+
+	dataSQL += ` ORDER BY p.full_name ASC NULLS LAST`
+
+	if err := t.db.QueryRow(ctx, countSQL, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	args = append(args, limit, offset)
+
+	if query != "" {
+		dataSQL += ` LIMIT $3 OFFSET $4`
+	} else {
+		dataSQL += ` LIMIT $2 OFFSET $3`
+	}
+
+	rows, err := t.db.Query(ctx, dataSQL, args...)
 	if err != nil {
-		return nil, 0, fmt.Errorf("SearchReceivers query: %w", err)
+		return nil, 0, err
 	}
 	defer rows.Close()
+
 	var results []model.ReceiverResult
+
 	for rows.Next() {
 		var r model.ReceiverResult
-		if err := rows.Scan(&r.UserID, &r.Email, &r.FullName, &r.Phone, &r.Photo, &r.WalletID, &r.WalletLabel); err != nil {
-			return nil, 0, fmt.Errorf("SearchReceivers scan: %w", err)
+
+		if err := rows.Scan(
+			&r.UserID,
+			&r.Email,
+			&r.FullName,
+			&r.Phone,
+			&r.Photo,
+			&r.WalletID,
+			&r.WalletLabel,
+		); err != nil {
+			return nil, 0, err
 		}
+
 		results = append(results, r)
 	}
+
 	return results, total, rows.Err()
 }
 

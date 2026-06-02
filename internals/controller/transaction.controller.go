@@ -50,9 +50,6 @@ func txToResponse(tx model.Transaction) dto.TransactionResponse {
 	}
 }
 
-// requirePIN reads "pin" from the JSON body (already bound into body struct),
-// but here we accept it as a separate helper that checks the raw body field.
-// Controllers that need PIN pass pinRaw directly.
 func (t *TransactionController) checkPIN(ctx *gin.Context, email, pin string) bool {
 	if pin == "" {
 		ctx.JSON(http.StatusBadRequest, dto.NewError("PIN required", "pin field is required"))
@@ -94,6 +91,17 @@ func historyTitle(h model.HistoryItem) string {
 	}
 }
 
+// GetSummary godoc
+// @Summary      Get user financial summary
+// @Description  Retrieves current balance, total income, total expense, and related wallets summary.
+// @Tags         Transactions
+// @Accept       json
+// @Produce      json
+// @Security		BearerAuth
+// @Success      200            {object}  dto.Response{data=dto.SummaryResponse}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      500            {object}  dto.Response{error}
+// @Router       /transactions/summary [get]
 func (t *TransactionController) GetSummary(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -112,6 +120,20 @@ func (t *TransactionController) GetSummary(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccess("Summary successfully retrieved", dto.SummaryResponse{CurrentBalance: summary.CurrentBalance, TotalIncome: summary.TotalIncome, TotalExpense: summary.TotalExpense, Wallets: wallets}))
 }
 
+// GetTransactionReport godoc
+// @Summary      Get chart report analytics
+// @Description  Fetches graphical data for income/expenses across specified temporal intervals.
+// @Tags         Transactions
+// @Accept       json
+// @Produce      json
+// @Security		BearerAuth
+// @Param        range          query     string  false  "Time span filter" Enums(7days, 30days) default(7days)
+// @Param        type           query     string  false  "Financial stream categorization" Enums(income, expense, both) default(both)
+// @Success      200            {object}  dto.Response{data=dto.TransactionReportResponse}
+// @Failure      400            {object}  dto.Response{error}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      500            {object}  dto.Response{error}
+// @Router       /transactions/report [get]
 func (t *TransactionController) GetTransactionReport(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -150,6 +172,21 @@ func (t *TransactionController) GetTransactionReport(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccess("Report successfully retrieved", dto.TransactionReportResponse{Range: rangeParam, Type: typeFilter, Points: resp}))
 }
 
+// GetTransactions godoc
+// @Summary      List all technical ledger records
+// @Description  Queries low-level ledger items with pagination, option to limit scope by wallet UUID.
+// @Tags         Transactions
+// @Accept       json
+// @Produce      json
+// @Security		BearerAuth
+// @Param        page           query     int     false  "Page target number" default(1)
+// @Param        limit          query     int     false  "Data slice size boundary" default(10)
+// @Param        wallet_id      query     string  false  "Target operational entity UUID filter"
+// @Success      200            {object}  dto.Response{data=dto.TransactionListResponse}
+// @Failure      400            {object}  dto.Response{error}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      500            {object}  dto.Response{error}
+// @Router       /transactions [get]
 func (t *TransactionController) GetTransactions(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -190,6 +227,19 @@ func (t *TransactionController) GetTransactions(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccess("Transactions retrieved successfully", dto.TransactionListResponse{Data: responses, Total: total, Page: page, Limit: limit}))
 }
 
+// GetHistory godoc
+// @Summary      Get user friendly historical logs
+// @Description  Queries normalized user operational logs suitable for high-level transactional feeds.
+// @Tags         Transactions
+// @Accept       json
+// @Produce      json
+// @Security		BearerAuth
+// @Param        page           query     int     false  "Page target number" default(1)
+// @Param        limit          query     int     false  "Data slice size boundary" default(10)
+// @Success      200            {object}  dto.Response{data=dto.HistoryListResponse}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      500            {object}  dto.Response{error}
+// @Router       /transactions/history [get]
 func (t *TransactionController) GetHistory(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -229,6 +279,19 @@ func (t *TransactionController) GetHistory(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccess("History retrieved successfully", dto.HistoryListResponse{Data: resp, Total: total, Page: page, Limit: limit}))
 }
 
+// GetTransactionByID godoc
+// @Summary      Get isolated ledger item details
+// @Description  Extracts data attributes of a specific transaction by explicit UUID entry.
+// @Tags         Transactions
+// @Accept       json
+// @Produce      json
+// @Security		BearerAuth
+// @Param        id             path      string  true  "Transaction UUID identifier"
+// @Success      200            {object}  dto.Response{data=dto.TransactionResponse}
+// @Failure      400            {object}  dto.Response{error}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      404            {object}  dto.Response{error}
+// @Router       /transactions/{id} [get]
 func (t *TransactionController) GetTransactionByID(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -248,6 +311,19 @@ func (t *TransactionController) GetTransactionByID(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccess("Transaction retrieved successfully", txToResponse(tx)))
 }
 
+// CreateTopup godoc
+// @Summary      Initiate financial deposit pipeline
+// @Description  Spawns an internal pending top-up structure targeting an active wallet instance.
+// @Tags         Transactions
+// @Accept       json
+// @Produce      json
+// @Security		BearerAuth
+// @Param        body           body      dto.TopupRequest  true  "Deposit payload specs"
+// @Success      201            {object}  dto.Response{data=dto.TopupResponse}
+// @Failure      400            {object}  dto.Response{error}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      500            {object}  dto.Response{error}
+// @Router       /transactions/topup [post]
 func (t *TransactionController) CreateTopup(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -259,7 +335,6 @@ func (t *TransactionController) CreateTopup(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err.Error()))
 		return
 	}
-	// PIN check before commit
 	if !t.checkPIN(ctx, email, body.Pin) {
 		return
 	}
@@ -294,6 +369,19 @@ func (t *TransactionController) CreateTopup(ctx *gin.Context) {
 	}))
 }
 
+// ConfirmTopup godoc
+// @Summary      Finalize operational top-up event
+// @Description  Validates internal states to switch a top-up balance allocation from pending to active.
+// @Tags         Transactions
+// @Accept       json
+// @Produce      json
+// @Security		BearerAuth
+// @Param        id             path      string  true  "Top-up entity UUID pointer"
+// @Success      200            {object}  dto.Response{data=dto.TopupResponse}
+// @Failure      400            {object}  dto.Response{error}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      404            {object}  dto.Response{error}
+// @Router       /transactions/topup/{id}/confirm [post]
 func (t *TransactionController) ConfirmTopup(ctx *gin.Context) {
 	_, ok := claimsEmail(ctx)
 	if !ok {
@@ -321,6 +409,20 @@ func (t *TransactionController) ConfirmTopup(ctx *gin.Context) {
 	}))
 }
 
+// CreateWithdrawal godoc
+// @Summary      Execute capital exit pipeline
+// @Description  Deducts assets out of the e-wallet matrix into external physical banking infrastructure.
+// @Tags         Transactions
+// @Accept       json
+// @Produce      json
+// @Security		BearerAuth
+// @Param        body           body      dto.WithdrawalRequest  true  "Withdrawal parameters details"
+// @Success      201            {object}  dto.Response{data=dto.WithdrawalResponse}
+// @Failure      400            {object}  dto.Response{error}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      422            {object}  dto.Response{error}
+// @Failure      500            {object}  dto.Response{error}
+// @Router       /transactions/withdraw [post]
 func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -332,7 +434,6 @@ func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err.Error()))
 		return
 	}
-	// PIN check before commit
 	if !t.checkPIN(ctx, email, body.Pin) {
 		return
 	}
@@ -360,6 +461,20 @@ func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 	}))
 }
 
+// CreateTransfer godoc
+// @Summary      Inter-wallet peer asset migration
+// @Description  Executes nuclear ledger balanced migrations across separate user wallets inside the application.
+// @Tags         Transactions
+// @Accept       json
+// @Produce      json
+// @Security		BearerAuth
+// @Param        body           body      dto.TransferRequest  true  "Transfer structural definition payload"
+// @Success      201            {object}  dto.Response{data=dto.TransferResponse}
+// @Failure      400            {object}  dto.Response{error}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      422            {object}  dto.Response{error}
+// @Failure      500            {object}  dto.Response{error}
+// @Router       /transactions/transfer [post]
 func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -371,7 +486,6 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err.Error()))
 		return
 	}
-	// PIN check before commit
 	if !t.checkPIN(ctx, email, body.Pin) {
 		return
 	}
@@ -405,7 +519,6 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 	if transfer.TransferCode != nil {
 		transferCode = *transfer.TransferCode
 	}
-	// Return sender's perspective only; recipient gets a notification (push/SSE — handled separately)
 	ctx.JSON(http.StatusCreated, dto.NewSuccess("Transfer completed successfully", dto.TransferResponse{
 		TransferCode: transferCode,
 		SenderTx:     txToResponse(senderTx),
@@ -416,6 +529,20 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 	}))
 }
 
+// CreateExpense godoc
+// @Summary      Log an outward operational purchase
+// @Description  Commits real-time commercial transactional operations by updating categorical metadata indexes.
+// @Tags         Transactions
+// @Accept       json
+// @Produce      json
+// @Security		BearerAuth
+// @Param        body           body      dto.ExpenseRequest  true  "Expense context descriptors body"
+// @Success      201            {object}  dto.Response{data=dto.ExpenseResponse}
+// @Failure      400            {object}  dto.Response{error}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      422            {object}  dto.Response{error}
+// @Failure      500            {object}  dto.Response{error}
+// @Router       /transactions/expense [post]
 func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -427,7 +554,6 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err.Error()))
 		return
 	}
-	// PIN check before commit
 	if !t.checkPIN(ctx, email, body.Pin) {
 		return
 	}
@@ -467,43 +593,85 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 	}))
 }
 
+// FindReceivers godoc
+// @Summary      List or search system profiles for transactions
+// @Description  Returns all available receiver profiles. Supports optional search filtering by full name or phone.
+// @Tags         Transactions
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        q      query     string  false  "Optional search keyword for full name or phone"
+// @Param        page   query     int     false  "Page target number" default(1)
+// @Param        limit  query     int     false  "Data slice size boundary" default(10)
+// @Success      200    {object}  dto.Response{data=dto.ReceiverListResponse}
+// @Failure      401    {object}  dto.Response{error}
+// @Failure      500    {object}  dto.Response{error}
+// @Router       /transactions/receivers [get]
 func (t *TransactionController) FindReceivers(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
 		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
 		return
 	}
+
 	query := ctx.Query("q")
-	if len(query) < 2 {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid search query", "q must be at least 2 characters"))
-		return
-	}
+
 	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(ctx.DefaultQuery("limit", "10"))
+
 	if page < 1 {
 		page = 1
 	}
+
 	if limit < 1 || limit > 50 {
 		limit = 10
 	}
-	results, total, err := t.transactionService.SearchReceivers(ctx.Request.Context(), email, query, page, limit)
+
+	results, total, err := t.transactionService.SearchReceivers(
+		ctx.Request.Context(),
+		email,
+		query,
+		page,
+		limit,
+	)
+
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, dto.NewError("Search failed", "Internal server error"))
+		ctx.JSON(http.StatusInternalServerError, dto.NewError("Search failed", err.Error()))
 		return
 	}
+
 	resp := make([]dto.ReceiverResult, 0, len(results))
+
 	for _, r := range results {
-		item := dto.ReceiverResult{UserID: r.UserID.String(), Email: r.Email, WalletID: r.WalletID.String(), WalletLabel: r.WalletLabel}
+		item := dto.ReceiverResult{
+			UserID:      r.UserID.String(),
+			Email:       r.Email,
+			WalletID:    r.WalletID.String(),
+			WalletLabel: r.WalletLabel,
+		}
+
 		if r.FullName != nil {
 			item.FullName = *r.FullName
 		}
+
 		if r.Phone != nil {
 			item.Phone = *r.Phone
 		}
+
 		if r.Photo != nil {
 			item.Photo = *r.Photo
 		}
+
 		resp = append(resp, item)
 	}
-	ctx.JSON(http.StatusOK, dto.NewSuccess("Receivers found", dto.ReceiverListResponse{Data: resp, Total: total, Page: page, Limit: limit}))
+
+	ctx.JSON(http.StatusOK, dto.NewSuccess(
+		"Receivers fetched successfully",
+		dto.ReceiverListResponse{
+			Data:  resp,
+			Total: total,
+			Page:  page,
+			Limit: limit,
+		},
+	))
 }

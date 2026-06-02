@@ -13,6 +13,14 @@ import (
 // AccessTokenExpiry is the lifetime of an access JWT.
 const AccessTokenExpiry = 24 * time.Hour
 
+// ResetTokenExpiry is the lifetime of a short-lived password-reset JWT.
+const ResetTokenExpiry = 10 * time.Minute
+
+// ResetTokenSubject is the JWT "sub" claim used exclusively for password-reset JWTs.
+// The change-password middleware checks for this value so a normal access token
+// cannot be used to reach the change-password endpoint.
+const ResetTokenSubject = "password-reset"
+
 type Claims struct {
 	ID    uuid.UUID
 	Email string
@@ -26,6 +34,21 @@ func NewClaims(id uuid.UUID, email string) *Claims {
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    os.Getenv("JWT_ISSUER"),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(AccessTokenExpiry)),
+		},
+	}
+}
+
+// NewResetClaims returns a short-lived Claims scoped only for changing a password.
+// The Subject field is set to ResetTokenSubject so the middleware can distinguish
+// this token from a normal access token.
+func NewResetClaims(id uuid.UUID, email string) *Claims {
+	return &Claims{
+		ID:    id,
+		Email: email,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    os.Getenv("JWT_ISSUER"),
+			Subject:   ResetTokenSubject,
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ResetTokenExpiry)),
 		},
 	}
 }

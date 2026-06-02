@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/config"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/router"
 )
@@ -24,11 +23,10 @@ import (
 // @in                          header
 // @name                        Authorization
 // @description                 Type "Bearer" followed by a space and your JWT. Example: "Bearer eyJhbGci..."
-
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Fatalf("Error loading env. \ncause: %s", err.Error())
-	}
+	// if err := godotenv.Load(); err != nil {
+	// 	log.Fatalf("Error loading env. \ncause: %s", err.Error())
+	// }
 	// inisialisasi
 	// gin.New()
 	app := gin.Default()
@@ -50,5 +48,10 @@ func main() {
 	router.MainRouter(app, db, rc)
 	// run
 	// addr := fmt.Sprintf("%s:%s", os.Getenv("APP_HOST"), os.Getenv("APP_PORT"))
-	app.Run(fmt.Sprintf("%s:%s", os.Getenv("APP_HOST"), os.Getenv("APP_PORT")))
+	serverAddr := fmt.Sprintf("%s:%s", os.Getenv("APP_HOST"), os.Getenv("APP_PORT"))
+
+	if err := app.Run(serverAddr); err != nil {
+		log.Fatalf("Failed to start server on %s: %v", serverAddr, err)
+	}
+
 }

@@ -27,6 +27,18 @@ func NewProfileController(profileservice *service.ProfileService) *ProfileContro
 	return &ProfileController{profileservice: profileservice}
 }
 
+// GetProfile godoc
+// @Summary      Get user profile details
+// @Description  Retrieves current authentication details' full name, telephone connection code, and user avatar endpoint.
+// @Tags         Profile
+// @Accept       json
+// @Produce      json
+// @Security		BearerAuth
+// @Success      200            {object}  dto.Response{data=dto.ProfileResponse}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      404            {object}  dto.Response{error}
+// @Failure      500            {object}  dto.Response{error}
+// @Router       /profile [get]
 func (p *ProfileController) GetProfile(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
@@ -80,6 +92,23 @@ func (p *ProfileController) validateAndSavePhoto(ctx *gin.Context, photo *multip
 	return &photoURL, nil
 }
 
+// EditProfile godoc
+// @Summary      Modify active user profile records
+// @Description  Updates system details including full name text, phone data info, and multipart image form attachments.
+// @Tags         Profile
+// @Accept       multipart/form-data
+// @Produce      json
+// @Security		BearerAuth
+// @Security		BearerAuth
+// @Param        full_name      formData  string  false "Updated full identity name representation"
+// @Param        phone          formData  string  false "Target telecommunications contact identity sequence"
+// @Param        photo          formData  file    false "Binary source file image attachment content"
+// @Success      200            {object}  dto.Response{data=object}
+// @Failure      400            {object}  dto.Response{error}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      422            {object}  dto.Response{error}
+// @Failure      500            {object}  dto.Response{error}
+// @Router       /profile/edit [PATCH]
 func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
@@ -120,6 +149,19 @@ func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccessNoData("Profile successfully updated"))
 }
 
+// EditPin godoc
+// @Summary      Update user secondary authorization pin
+// @Description  First-time setup: provide only pin_hash. Changing existing PIN: provide old_pin + pin_hash.
+// @Tags         Profile
+// @Accept       json
+// @Produce      json
+// @Security		BearerAuth
+// @Param        body           body      dto.SetPinRequest  true  "PIN update payload"
+// @Success      200            {object}  dto.Response{data=object}
+// @Failure      400            {object}  dto.Response{error}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      500            {object}  dto.Response{error}
+// @Router       /profile/change/pin [PATCH]
 func (p *ProfileController) EditPin(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
@@ -134,8 +176,12 @@ func (p *ProfileController) EditPin(ctx *gin.Context) {
 		return
 	}
 
-	_, err := p.profileservice.EditPin(ctx.Request.Context(), email, *body.PinHash)
+	_, err := p.profileservice.EditPinWithAuth(ctx.Request.Context(), email, body.OldPin, *body.PinHash)
 	if err != nil {
+		if err.Error() == "old pin is required" || err.Error() == "invalid old pin" {
+			ctx.JSON(http.StatusUnauthorized, dto.NewError("Failed to update PIN", err.Error()))
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to update PIN", err.Error()))
 		return
 	}
@@ -143,7 +189,21 @@ func (p *ProfileController) EditPin(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccessNoData("PIN successfully updated"))
 }
 
+// EditPassword godoc
+// @Summary      Modify security entry password credentials
+// @Description  Modifies internal account validation strings. Requires old confirmation verification strings.
+// @Tags         Profile
+// @Accept       json
+// @Produce      json
+// @Security		BearerAuth
+// @Param        body           body      dto.ChangePasswordRequest  true  "Password structure swap payload"
+// @Success      200            {object}  dto.Response{data=object}
+// @Failure      400            {object}  dto.Response{error}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      500            {object}  dto.Response{error}
+// @Router       /profile/password [PATCH]
 func (p *ProfileController) EditPassword(ctx *gin.Context) {
+
 	claims, exists := ctx.Get("claims")
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
@@ -170,6 +230,17 @@ func (p *ProfileController) EditPassword(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccessNoData("Password successfully updated"))
 }
 
+// GetUserInfo godoc
+// @Summary      Get unified system user statistics context
+// @Description  Assembles structured systemic components including identities, security states, and financial metrics.
+// @Tags         Profile
+// @Accept       json
+// @Produce      json
+// @Security		BearerAuth
+// @Success      200            {object}  dto.Response{data=dto.UserInfoResponse}
+// @Failure      401            {object}  dto.Response{error}
+// @Failure      500            {object}  dto.Response{error}
+// @Router       /profile/info [get]
 func (p *ProfileController) GetUserInfo(ctx *gin.Context) {
 	claims, exists := ctx.Get("claims")
 	if !exists {
@@ -192,5 +263,6 @@ func (p *ProfileController) GetUserInfo(ctx *gin.Context) {
 		Phone:          profile.Phone,
 		Photo:          profile.Photo,
 		CurrentBalance: balance,
+		PinHash:        profile.PinHash,
 	}))
 }

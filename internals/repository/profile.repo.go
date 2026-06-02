@@ -117,6 +117,23 @@ func (p *ProfileRepo) EditPin(ctx context.Context, email string, newPinHash stri
 	return userPin, nil
 }
 
+func (p *ProfileRepo) GetCurrentPinHash(ctx context.Context, email string) (string, error) {
+	var hash string
+	err := p.db.QueryRow(ctx, `
+		SELECT COALESCE(up.pin_hash, '')
+		FROM user_pins up
+		JOIN users u ON up.user_id = u.id
+		WHERE u.email = $1`, email,
+	).Scan(&hash)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", nil // no PIN row → treat as not set
+		}
+		return "", fmt.Errorf("GetCurrentPinHash: %w", err)
+	}
+	return hash, nil
+}
+
 // GetCurrentPassword returns the bcrypt hash of the user's current password.
 func (p *ProfileRepo) GetCurrentPassword(ctx context.Context, email string) (string, error) {
 	var hash string
@@ -152,20 +169,25 @@ func (p *ProfileRepo) EditPassword(ctx context.Context, email string, newPasswor
 func (p *ProfileRepo) GetUserInfo(ctx context.Context, email string) (model.Profile, int64, error) {
 	var profile model.Profile
 	var balance int64
+
 	err := p.db.QueryRow(ctx, `
-		SELECT
-			p.full_name,
-			p.phone,
-			p.photo,
-			COALESCE(SUM(w.balance), 0) AS current_balance
-		FROM profiles p
-		JOIN users u ON p.user_id = u.id
-		LEFT JOIN wallets w ON w.user_id = u.id
-		WHERE u.email = $1
-		GROUP BY p.full_name, p.phone, p.photo`, email,
-	).Scan(&profile.FullName, &profile.Phone, &profile.Photo, &balance)
+        SELECT
+            p.full_name,
+            p.phone,
+            p.photo,
+            COALESCE(SUM(w.balance), 0) AS current_balance,
+            COALESCE(up.pin_hash, '') AS pin_hash
+        FROM profiles p
+        JOIN users u ON p.user_id = u.id
+        LEFT JOIN user_pins up ON p.user_id = up.user_id
+        LEFT JOIN wallets w ON w.user_id = u.id
+        WHERE u.email = $1
+        GROUP BY p.full_name, p.phone, p.photo, up.pin_hash`, email,
+	).Scan(&profile.FullName, &profile.Phone, &profile.Photo, &balance, &profile.PinHash)
+
 	if err != nil {
 		return model.Profile{}, 0, err
 	}
+
 	return profile, balance, nil
 }
