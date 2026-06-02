@@ -66,7 +66,7 @@ func (a *AuthService) Login(ctx context.Context, user dto.LoginRequest) (string,
 		ctx,
 		login.ID.String(),
 		token,
-		model.TokenTypeAccess,
+		model.TokenTypeRefresh,
 		expiresAt,
 	); err != nil {
 		return "", err

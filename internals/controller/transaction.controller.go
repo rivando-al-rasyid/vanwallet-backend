@@ -594,19 +594,18 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 }
 
 // FindReceivers godoc
-// @Summary      Search system profiles for transactions
-// @Description  Returns filtered structural matches for processing inter-user transactional lookups.
+// @Summary      List or search system profiles for transactions
+// @Description  Returns all available receiver profiles. Supports optional search filtering by full name or phone.
 // @Tags         Transactions
 // @Accept       json
 // @Produce      json
-// @Security		BearerAuth
-// @Param        q              query     string  true   "Lookup parameter string minimum length 2 characters"
-// @Param        page           query     int     false  "Page target number" default(1)
-// @Param        limit          query     int     false  "Data slice size boundary" default(10)
-// @Success      200            {object}  dto.Response{data=dto.ReceiverListResponse}
-// @Failure      400            {object}  dto.Response{error}
-// @Failure      401            {object}  dto.Response{error}
-// @Failure      500            {object}  dto.Response{error}
+// @Security     BearerAuth
+// @Param        q      query     string  false  "Optional search keyword for full name or phone"
+// @Param        page   query     int     false  "Page target number" default(1)
+// @Param        limit  query     int     false  "Data slice size boundary" default(10)
+// @Success      200    {object}  dto.Response{data=dto.ReceiverListResponse}
+// @Failure      401    {object}  dto.Response{error}
+// @Failure      500    {object}  dto.Response{error}
 // @Router       /transactions/receivers [get]
 func (t *TransactionController) FindReceivers(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
@@ -614,37 +613,65 @@ func (t *TransactionController) FindReceivers(ctx *gin.Context) {
 		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
 		return
 	}
+
 	query := ctx.Query("q")
-	if len(query) < 2 {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid search query", "q must be at least 2 characters"))
-		return
-	}
+
 	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(ctx.DefaultQuery("limit", "10"))
+
 	if page < 1 {
 		page = 1
 	}
+
 	if limit < 1 || limit > 50 {
 		limit = 10
 	}
-	results, total, err := t.transactionService.SearchReceivers(ctx.Request.Context(), email, query, page, limit)
+
+	results, total, err := t.transactionService.SearchReceivers(
+		ctx.Request.Context(),
+		email,
+		query,
+		page,
+		limit,
+	)
+
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, dto.NewError("Search failed", "Internal server error"))
+		ctx.JSON(http.StatusInternalServerError, dto.NewError("Search failed", err.Error()))
 		return
 	}
+
 	resp := make([]dto.ReceiverResult, 0, len(results))
+
 	for _, r := range results {
-		item := dto.ReceiverResult{UserID: r.UserID.String(), Email: r.Email, WalletID: r.WalletID.String(), WalletLabel: r.WalletLabel}
+		item := dto.ReceiverResult{
+			UserID:      r.UserID.String(),
+			Email:       r.Email,
+			WalletID:    r.WalletID.String(),
+			WalletLabel: r.WalletLabel,
+		}
+
 		if r.FullName != nil {
 			item.FullName = *r.FullName
 		}
+
 		if r.Phone != nil {
 			item.Phone = *r.Phone
 		}
+
 		if r.Photo != nil {
 			item.Photo = *r.Photo
 		}
+
 		resp = append(resp, item)
 	}
-	ctx.JSON(http.StatusOK, dto.NewSuccess("Receivers found", dto.ReceiverListResponse{Data: resp, Total: total, Page: page, Limit: limit}))
+
+	ctx.JSON(http.StatusOK, dto.NewSuccess(
+		"Receivers fetched successfully",
+		dto.ReceiverListResponse{
+			Data:  resp,
+			Total: total,
+			Page:  page,
+			Limit: limit,
+		},
+	))
 }
