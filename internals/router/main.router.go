@@ -5,13 +5,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	_ "github.com/rivando-al-rasyid/vanwallet-backend/docs"
+	"github.com/rivando-al-rasyid/vanwallet-backend/internals/middleware"
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func MainRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) {
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
-	// router.Use(middleware.CORSMiddleware)
+	router.Use(middleware.CORSMiddleware)
 	router.Static("/img", "public/img")
 	AuthRouter(router, db, rdb)
 	ProfileRouter(router, db)
