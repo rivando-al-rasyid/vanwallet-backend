@@ -16,7 +16,7 @@ RUN swag init -g ./cmd/main.go
 
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w" \
-    -o /vanwallet ./cmd/
+    -o /vanwallet ./cmd/main.go
 
 
 FROM alpine:3.23
