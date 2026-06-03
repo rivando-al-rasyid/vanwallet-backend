@@ -222,8 +222,6 @@ func (t *TransactionRepo) GetAllTransactions(ctx context.Context, email string, 
 	return txs, total, err
 }
 
-// GetAllHistory returns a unified paginated history combining topups AND ledger transactions,
-// sorted by created_at DESC.
 func (t *TransactionRepo) GetAllHistory(ctx context.Context, email string, page, limit int) ([]model.HistoryItem, int, error) {
 	offset := (page - 1) * limit
 

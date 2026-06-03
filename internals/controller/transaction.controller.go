@@ -348,9 +348,6 @@ func (t *TransactionController) CreateTopup(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err.Error()))
 		return
 	}
-	if !t.checkPIN(ctx, email, body.Pin) {
-		return
-	}
 	walletID, err := uuid.Parse(body.WalletID)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid wallet_id", "wallet_id must be a valid UUID"))

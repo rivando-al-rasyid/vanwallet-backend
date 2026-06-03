@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/google/uuid"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/config"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/dto"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/pkg"
@@ -256,6 +257,11 @@ func (p *ProfileController) GetUserInfo(ctx *gin.Context) {
 		return
 	}
 
+	walletID := profile.UserID.String()
+	if profile.WalletID != uuid.Nil {
+		walletID = profile.WalletID.String()
+	}
+
 	ctx.JSON(http.StatusOK, dto.NewSuccess("User info successfully retrieved", dto.UserInfoResponse{
 		ID:             claimsTyped.ID.String(),
 		Email:          email,
@@ -263,6 +269,7 @@ func (p *ProfileController) GetUserInfo(ctx *gin.Context) {
 		Phone:          profile.Phone,
 		Photo:          profile.Photo,
 		CurrentBalance: balance,
+		WalletID:       walletID,
 		PinHash:        profile.PinHash,
 	}))
 }

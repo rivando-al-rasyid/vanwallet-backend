@@ -32,7 +32,7 @@ seed-reset:
 docker-up: 
 	@docker compose up -d --build
 docker-down: 
-	@docker compose down -v
+	@docker compose down
 # ── Misc ───────────────────────────────────────────────────────────────────
 print-db-url:
 	@echo $(DATABASE_URL)

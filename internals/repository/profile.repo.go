@@ -177,7 +177,7 @@ func (p *ProfileRepo) GetUserInfo(ctx context.Context, email string) (model.Prof
             p.photo,
             COALESCE(SUM(w.balance), 0) AS current_balance,
             COALESCE(up.pin_hash, '') AS pin_hash,
-            COALESCE((ARRAY_AGG(w.id ORDER BY w.created_at ASC))[1], '00000000-0000-0000-0000-000000000000'::uuid) AS wallet_id
+            COALESCE((ARRAY_AGG(w.id ORDER BY w.created_at ASC))[1]) AS wallet_id
         FROM profiles p
         JOIN users u ON p.user_id = u.id
         LEFT JOIN user_pins up ON p.user_id = up.user_id
