@@ -3,7 +3,7 @@ package dto
 // ExpenseRequest is the payload for recording an expense.
 // Pin is verified server-side before the expense is committed.
 type ExpenseRequest struct {
-	WalletID     string  `json:"wallet_id"     binding:"required,uuid4"`
+	WalletID     string  `json:"wallet_id"     binding:"required"`
 	Amount       int64   `json:"amount"        binding:"required,gt=0"`
 	AdminFee     int64   `json:"admin_fee"     binding:"omitempty,gte=0"`
 	Category     string  `json:"category"      binding:"omitempty,max=50"`
