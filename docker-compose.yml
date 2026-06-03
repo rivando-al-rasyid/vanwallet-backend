@@ -1,21 +1,28 @@
 services:
   frontend:
-    image: ghcr.io/rivando-al-rasyid/vanwallet-react:latest 
+    image: ghcr.io/rivando-al-rasyid/vanwallet-react:latest
     container_name: vanwallet_frontend
     restart: unless-stopped
     ports:
       - "80:80" # This is the ONLY entry point from the host machine
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - vanwallet_network
 
   backend:
-    image: ghcr.io/rivando-al-rasyid/vanwallet-backend:latest 
+    image: ghcr.io/rivando-al-rasyid/vanwallet-backend:latest
     container_name: vanwallet_backend
     restart: unless-stopped
     env_file:
       - .env
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
     depends_on:
       migration:
         condition: service_completed_successfully
@@ -47,6 +54,7 @@ services:
   migration:
     image: migrate/migrate:v4.18.3
     container_name: vanwallet_migration
+    restart: on-failure
     depends_on:
       postgres:
         condition: service_healthy
