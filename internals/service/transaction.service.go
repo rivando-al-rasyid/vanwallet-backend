@@ -17,10 +17,7 @@ type TransactionRepository interface {
 	WalletBelongsToUser(ctx context.Context, email string, walletID uuid.UUID) (bool, error)
 	GetSummary(ctx context.Context, email string) (model.TransactionSummary, error)
 	GetTransactionReport(ctx context.Context, email, rangeParam, typeFilter string) ([]model.ChartPoint, error)
-	GetTransactionsByWallet(ctx context.Context, email string, walletID uuid.UUID, page, limit int) ([]model.Transaction, int, error)
-	GetAllTransactions(ctx context.Context, email string, page, limit int) ([]model.Transaction, int, error)
-	GetAllHistory(ctx context.Context, email string, page, limit int) ([]model.HistoryItem, int, error)
-	GetTransactionByID(ctx context.Context, email string, transactionID uuid.UUID) (model.Transaction, error)
+	GetAllHistory(ctx context.Context, email string, filter model.HistoryFilter) ([]model.HistoryItem, int, error)
 	CreateTopup(ctx context.Context, req model.Topup) (model.Topup, error)
 	ConfirmTopup(ctx context.Context, email string, topupID uuid.UUID) (model.Topup, error)
 	CreateWithdrawal(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, bank model.Withdrawal) (model.Transaction, error)
@@ -55,16 +52,21 @@ func (s *TransactionService) GetTransactionReport(ctx context.Context, email, ra
 	return s.repo.GetTransactionReport(ctx, email, rangeParam, typeFilter)
 }
 
-func (s *TransactionService) GetTransactionsByWallet(ctx context.Context, email string, walletID uuid.UUID, page, limit int) ([]model.Transaction, int, error) {
-	return s.repo.GetTransactionsByWallet(ctx, email, walletID, page, limit)
-}
-
-func (s *TransactionService) GetAllTransactions(ctx context.Context, email string, page, limit int) ([]model.Transaction, int, error) {
-	return s.repo.GetAllTransactions(ctx, email, page, limit)
-}
-
-func (s *TransactionService) GetAllHistory(ctx context.Context, email string, page, limit int) ([]model.HistoryItem, int, error) {
-	rkey := fmt.Sprintf("vando:history:%s:p%d:l%d", email, page, limit)
+func (s *TransactionService) GetAllHistory(ctx context.Context, email string, filter model.HistoryFilter) ([]model.HistoryItem, int, error) {
+	rkey := fmt.Sprintf(
+		"vando:history:%s:p%d:l%d:w%s:s%s:t%s:st%s:d%s:from%s:to%s:q%s",
+		email,
+		filter.Page,
+		filter.Limit,
+		filter.WalletID,
+		filter.Source,
+		filter.Type,
+		filter.Status,
+		filter.Direction,
+		filter.StartDate,
+		filter.EndDate,
+		filter.Query,
+	)
 
 	type cacheEntry struct {
 		Items []model.HistoryItem `json:"items"`
@@ -80,7 +82,7 @@ func (s *TransactionService) GetAllHistory(ctx context.Context, email string, pa
 
 	log.Println("cache miss:", email)
 
-	fetched, total, err := s.repo.GetAllHistory(ctx, email, page, limit)
+	fetched, total, err := s.repo.GetAllHistory(ctx, email, filter)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -90,10 +92,6 @@ func (s *TransactionService) GetAllHistory(ctx context.Context, email string, pa
 	}
 
 	return fetched, total, nil
-}
-
-func (s *TransactionService) GetTransactionByID(ctx context.Context, email string, transactionID uuid.UUID) (model.Transaction, error) {
-	return s.repo.GetTransactionByID(ctx, email, transactionID)
 }
 
 func (s *TransactionService) CreateTopup(ctx context.Context, req model.Topup) (model.Topup, error) {

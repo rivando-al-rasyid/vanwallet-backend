@@ -185,71 +185,25 @@ func (t *TransactionController) GetTransactionReport(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccess("Report successfully retrieved", dto.TransactionReportResponse{Range: rangeParam, Type: typeFilter, Points: resp}))
 }
 
-// GetTransactions godoc
-// @Summary      List all technical ledger records
-// @Description  Queries low-level ledger items with pagination, option to limit scope by wallet UUID.
-// @Tags         Transactions
-// @Accept       json
-// @Produce      json
-// @Security		BearerAuth
-// @Param        page           query     int     false  "Page target number" default(1)
-// @Param        limit          query     int     false  "Data slice size boundary" default(10)
-// @Param        wallet_id      query     string  false  "Target operational entity UUID filter"
-// @Success      200            {object}  dto.Response{data=dto.TransactionListResponse}
-// @Failure      400            {object}  dto.Response{error}
-// @Failure      401            {object}  dto.Response{error}
-// @Failure      500            {object}  dto.Response{error}
-// @Router       /transaction [get]
-func (t *TransactionController) GetTransactions(ctx *gin.Context) {
-	email, ok := claimsEmail(ctx)
-	if !ok {
-		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
-		return
-	}
-	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(ctx.DefaultQuery("limit", "10"))
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 || limit > 100 {
-		limit = 10
-	}
-	var (
-		txs   []model.Transaction
-		total int
-		err   error
-	)
-	if walletIDStr := ctx.Query("wallet_id"); walletIDStr != "" {
-		walletID, parseErr := uuid.Parse(walletIDStr)
-		if parseErr != nil {
-			ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid wallet_id", "wallet_id must be a valid UUID"))
-			return
-		}
-		txs, total, err = t.transactionService.GetTransactionsByWallet(ctx.Request.Context(), email, walletID, page, limit)
-	} else {
-		txs, total, err = t.transactionService.GetAllTransactions(ctx.Request.Context(), email, page, limit)
-	}
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to fetch transactions", err.Error()))
-		return
-	}
-	responses := make([]dto.TransactionResponse, 0, len(txs))
-	for _, tx := range txs {
-		responses = append(responses, txToResponse(tx))
-	}
-	ctx.JSON(http.StatusOK, dto.NewSuccess("Transactions retrieved successfully", dto.TransactionListResponse{Data: responses, Total: total, Page: page, Limit: limit}))
-}
-
 // GetHistory godoc
-// @Summary      Get user friendly historical logs
-// @Description  Queries normalized user operational logs suitable for high-level transactional feeds.
+// @Summary      Get paginated transaction history
+// @Description  Returns the unified user transaction history feed. Supports pagination, filters, and simple search.
 // @Tags         Transactions
 // @Accept       json
 // @Produce      json
 // @Security		BearerAuth
-// @Param        page           query     int     false  "Page target number" default(1)
-// @Param        limit          query     int     false  "Data slice size boundary" default(10)
+// @Param        page           query     int     false  "Page number" default(1)
+// @Param        limit          query     int     false  "Items per page" default(10)
+// @Param        wallet_id      query     string  false  "Filter by wallet UUID"
+// @Param        source         query     string  false  "Filter source" Enums(transaction, topup)
+// @Param        type           query     string  false  "Filter type" Enums(TOPUP, EXPENSE, WITHDRAWAL, TRANSFER_IN, TRANSFER_OUT)
+// @Param        status         query     string  false  "Filter status" Enums(PENDING, SUCCESS, FAILED, CANCELLED)
+// @Param        direction      query     string  false  "Filter direction" Enums(income, expense)
+// @Param        start_date     query     string  false  "Start date YYYY-MM-DD"
+// @Param        end_date       query     string  false  "End date YYYY-MM-DD"
+// @Param        q              query     string  false  "Search text"
 // @Success      200            {object}  dto.Response{data=dto.HistoryListResponse}
+// @Failure      400            {object}  dto.Response{error}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
 // @Router       /transaction/history [get]
@@ -259,6 +213,7 @@ func (t *TransactionController) GetHistory(ctx *gin.Context) {
 		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
 		return
 	}
+
 	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(ctx.DefaultQuery("limit", "10"))
 	if page < 1 {
@@ -267,18 +222,43 @@ func (t *TransactionController) GetHistory(ctx *gin.Context) {
 	if limit < 1 || limit > 100 {
 		limit = 10
 	}
-	items, total, err := t.transactionService.GetAllHistory(ctx.Request.Context(), email, page, limit)
+
+	filter := model.HistoryFilter{
+		Page:      page,
+		Limit:     limit,
+		WalletID:  ctx.Query("wallet_id"),
+		Source:    ctx.Query("source"),
+		Type:      ctx.Query("type"),
+		Status:    ctx.Query("status"),
+		Direction: ctx.Query("direction"),
+		StartDate: ctx.Query("start_date"),
+		EndDate:   ctx.Query("end_date"),
+		Query:     ctx.Query("q"),
+	}
+	if filter.Query == "" {
+		filter.Query = ctx.Query("query")
+	}
+
+	if filter.WalletID != "" {
+		if _, err := uuid.Parse(filter.WalletID); err != nil {
+			ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid wallet_id", "wallet_id must be a valid UUID"))
+			return
+		}
+	}
+
+	items, total, err := t.transactionService.GetAllHistory(ctx.Request.Context(), email, filter)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to fetch history", err.Error()))
 		return
 	}
+
 	resp := make([]dto.HistoryItem, 0, len(items))
 	for _, h := range items {
 		resp = append(resp, dto.HistoryItem{
 			ID:            h.ID,
 			Source:        h.Source,
 			Type:          h.Type,
-			Direction:     historyDirection(h.Type),
+			Direction:     h.Direction,
 			Title:         historyTitle(h),
 			Amount:        h.Amount,
 			AdminFee:      h.AdminFee,
@@ -286,42 +266,23 @@ func (t *TransactionController) GetHistory(ctx *gin.Context) {
 			PaymentMethod: h.PaymentMethod,
 			Note:          h.Note,
 			WalletID:      h.WalletID,
+			WalletLabel:   h.WalletLabel,
 			CreatedAt:     h.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		})
 	}
-	ctx.JSON(http.StatusOK, dto.NewSuccess("History retrieved successfully", dto.HistoryListResponse{Data: resp, Total: total, Page: page, Limit: limit}))
-}
 
-// GetTransactionByID godoc
-// @Summary      Get isolated ledger item details
-// @Description  Extracts data attributes of a specific transaction by explicit UUID entry.
-// @Tags         Transactions
-// @Accept       json
-// @Produce      json
-// @Security		BearerAuth
-// @Param        id             path      string  true  "Transaction UUID identifier"
-// @Success      200            {object}  dto.Response{data=dto.TransactionResponse}
-// @Failure      400            {object}  dto.Response{error}
-// @Failure      401            {object}  dto.Response{error}
-// @Failure      404            {object}  dto.Response{error}
-// @Router       /transaction/{id} [get]
-func (t *TransactionController) GetTransactionByID(ctx *gin.Context) {
-	email, ok := claimsEmail(ctx)
-	if !ok {
-		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
-		return
+	totalPages := 0
+	if total > 0 {
+		totalPages = (total + limit - 1) / limit
 	}
-	txID, err := uuid.Parse(ctx.Param("id"))
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid transaction id", "id must be a valid UUID"))
-		return
-	}
-	tx, err := t.transactionService.GetTransactionByID(ctx.Request.Context(), email, txID)
-	if err != nil {
-		ctx.JSON(http.StatusNotFound, dto.NewError("Transaction not found", err.Error()))
-		return
-	}
-	ctx.JSON(http.StatusOK, dto.NewSuccess("Transaction retrieved successfully", txToResponse(tx)))
+
+	ctx.JSON(http.StatusOK, dto.NewSuccess("History retrieved successfully", dto.HistoryListResponse{
+		Data:       resp,
+		Total:      total,
+		Page:       page,
+		Limit:      limit,
+		TotalPages: totalPages,
+	}))
 }
 
 // CreateTopup godoc

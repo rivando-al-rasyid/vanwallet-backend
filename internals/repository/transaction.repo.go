@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -169,114 +170,115 @@ func (t *TransactionRepo) GetTransactionReport(ctx context.Context, email, range
 	return result, rows.Err()
 }
 
-// GetTransactionsByWallet returns paginated transactions for a single wallet owned by the user.
-func (t *TransactionRepo) GetTransactionsByWallet(ctx context.Context, email string, walletID uuid.UUID, page, limit int) ([]model.Transaction, int, error) {
-	offset := (page - 1) * limit
-	var wid uuid.UUID
-	if err := t.db.QueryRow(ctx, `
-		SELECT w.id FROM wallets w JOIN users u ON w.user_id = u.id
-		WHERE u.email = $1 AND w.id = $2`, email, walletID,
-	).Scan(&wid); err != nil {
-		return nil, 0, fmt.Errorf("GetTransactionsByWallet: wallet not found or access denied: %w", err)
-	}
-	var total int
-	if err := t.db.QueryRow(ctx, `SELECT COUNT(*) FROM transactions WHERE wallet_id = $1`, walletID).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("GetTransactionsByWallet count: %w", err)
-	}
-	rows, err := t.db.Query(ctx, `
-		SELECT id, wallet_id, type, amount, admin_fee, status, idempotency_key, note, created_at, updated_at
-		FROM transactions WHERE wallet_id = $1
-		ORDER BY created_at DESC LIMIT $2 OFFSET $3`, walletID, limit, offset)
-	if err != nil {
-		return nil, 0, fmt.Errorf("GetTransactionsByWallet query: %w", err)
-	}
-	defer rows.Close()
-	txs, err := scanTransactions(rows)
-	return txs, total, err
-}
+func (t *TransactionRepo) GetAllHistory(ctx context.Context, email string, filter model.HistoryFilter) ([]model.HistoryItem, int, error) {
+	offset := (filter.Page - 1) * filter.Limit
 
-// GetAllTransactions returns paginated ledger transactions across all wallets for the user.
-func (t *TransactionRepo) GetAllTransactions(ctx context.Context, email string, page, limit int) ([]model.Transaction, int, error) {
-	offset := (page - 1) * limit
-	var total int
-	if err := t.db.QueryRow(ctx, `
-		SELECT COUNT(*) FROM transactions tr
-		JOIN wallets w ON tr.wallet_id = w.id
-		JOIN users u ON w.user_id = u.id
-		WHERE u.email = $1`, email,
-	).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("GetAllTransactions count: %w", err)
-	}
-	rows, err := t.db.Query(ctx, `
-		SELECT tr.id, tr.wallet_id, tr.type, tr.amount, tr.admin_fee, tr.status, tr.idempotency_key, tr.note, tr.created_at, tr.updated_at
-		FROM transactions tr
-		JOIN wallets w ON tr.wallet_id = w.id
-		JOIN users u ON w.user_id = u.id
-		WHERE u.email = $1
-		ORDER BY tr.created_at DESC LIMIT $2 OFFSET $3`, email, limit, offset)
-	if err != nil {
-		return nil, 0, fmt.Errorf("GetAllTransactions query: %w", err)
-	}
-	defer rows.Close()
-	txs, err := scanTransactions(rows)
-	return txs, total, err
-}
-
-func (t *TransactionRepo) GetAllHistory(ctx context.Context, email string, page, limit int) ([]model.HistoryItem, int, error) {
-	offset := (page - 1) * limit
-
-	countSQL := `
+	baseSQL := `
 		WITH UserWallets AS (
-			SELECT w.id FROM wallets w JOIN users u ON w.user_id = u.id WHERE u.email = $1
+			SELECT w.id, w.label
+			FROM wallets w
+			JOIN users u ON w.user_id = u.id
+			WHERE u.email = $1
+		), UnifiedHistory AS (
+			SELECT
+				tr.id::text                         AS id,
+				'transaction'                       AS source,
+				tr.type::text                       AS type,
+				CASE
+					WHEN tr.type = 'TRANSFER_IN' THEN 'income'
+					ELSE 'expense'
+				END                                AS direction,
+				tr.amount                           AS amount,
+				tr.admin_fee                        AS admin_fee,
+				tr.status::text                     AS status,
+				''                                  AS payment_method,
+				COALESCE(tr.note, '')               AS note,
+				tr.wallet_id::text                  AS wallet_id,
+				uw.label                            AS wallet_label,
+				tr.created_at                       AS created_at
+			FROM transactions tr
+			JOIN UserWallets uw ON tr.wallet_id = uw.id
+
+			UNION ALL
+
+			SELECT
+				tp.id::text                         AS id,
+				'topup'                             AS source,
+				'TOPUP'                             AS type,
+				'income'                            AS direction,
+				tp.amount                           AS amount,
+				0                                   AS admin_fee,
+				tp.status::text                     AS status,
+				COALESCE(tp.payment_method::text, '') AS payment_method,
+				''                                  AS note,
+				tp.wallet_id::text                  AS wallet_id,
+				uw.label                            AS wallet_label,
+				tp.created_at                       AS created_at
+			FROM topups tp
+			JOIN UserWallets uw ON tp.wallet_id = uw.id
 		)
-		SELECT (
-			SELECT COUNT(*) FROM transactions tr WHERE tr.wallet_id IN (SELECT id FROM UserWallets)
-		) + (
-			SELECT COUNT(*) FROM topups tp WHERE tp.wallet_id IN (SELECT id FROM UserWallets)
-		)`
+		SELECT * FROM UnifiedHistory`
+
+	args := []any{email}
+	conditions := make([]string, 0)
+	addArg := func(value any) string {
+		args = append(args, value)
+		return fmt.Sprintf("$%d", len(args))
+	}
+
+	if filter.WalletID != "" {
+		conditions = append(conditions, "wallet_id = "+addArg(filter.WalletID))
+	}
+	if filter.Source != "" {
+		conditions = append(conditions, "LOWER(source) = LOWER("+addArg(filter.Source)+")")
+	}
+	if filter.Type != "" {
+		conditions = append(conditions, "UPPER(type) = UPPER("+addArg(filter.Type)+")")
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "UPPER(status) = UPPER("+addArg(filter.Status)+")")
+	}
+	if filter.Direction != "" {
+		conditions = append(conditions, "LOWER(direction) = LOWER("+addArg(filter.Direction)+")")
+	}
+	if filter.StartDate != "" {
+		conditions = append(conditions, "created_at >= "+addArg(filter.StartDate)+"::date")
+	}
+	if filter.EndDate != "" {
+		conditions = append(conditions, "created_at < ("+addArg(filter.EndDate)+"::date + INTERVAL '1 day')")
+	}
+	if filter.Query != "" {
+		q := "%" + filter.Query + "%"
+		placeholder := addArg(q)
+		conditions = append(conditions, `(
+			id ILIKE `+placeholder+` OR
+			source ILIKE `+placeholder+` OR
+			type ILIKE `+placeholder+` OR
+			direction ILIKE `+placeholder+` OR
+			status ILIKE `+placeholder+` OR
+			payment_method ILIKE `+placeholder+` OR
+			note ILIKE `+placeholder+` OR
+			wallet_id ILIKE `+placeholder+` OR
+			wallet_label ILIKE `+placeholder+`
+		)`)
+	}
+
+	whereSQL := ""
+	if len(conditions) > 0 {
+		whereSQL = " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countSQL := `SELECT COUNT(*) FROM (` + baseSQL + whereSQL + `) AS filtered_history`
 	var total int
-	if err := t.db.QueryRow(ctx, countSQL, email).Scan(&total); err != nil {
+	if err := t.db.QueryRow(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("GetAllHistory count: %w", err)
 	}
 
-	querySQL := `
-		WITH UserWallets AS (
-			SELECT w.id FROM wallets w JOIN users u ON w.user_id = u.id WHERE u.email = $1
-		)
-		SELECT
-			tr.id::text,
-			'transaction'         AS source,
-			tr.type::text         AS type,
-			tr.amount,
-			tr.admin_fee,
-			tr.status::text,
-			''                    AS payment_method,
-			COALESCE(tr.note, '') AS note,
-			tr.wallet_id::text,
-			tr.created_at
-		FROM transactions tr
-		WHERE tr.wallet_id IN (SELECT id FROM UserWallets)
+	queryArgs := append([]any{}, args...)
+	queryArgs = append(queryArgs, filter.Limit, offset)
+	querySQL := baseSQL + whereSQL + fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", len(queryArgs)-1, len(queryArgs))
 
-		UNION ALL
-
-		SELECT
-			tp.id::text,
-			'topup'               AS source,
-			'TOPUP'               AS type,
-			tp.amount,
-			0                     AS admin_fee,
-			tp.status::text,
-			COALESCE(tp.payment_method::text, '') AS payment_method,
-			''                    AS note,
-			tp.wallet_id::text,
-			tp.created_at
-		FROM topups tp
-		WHERE tp.wallet_id IN (SELECT id FROM UserWallets)
-
-		ORDER BY created_at DESC
-		LIMIT $2 OFFSET $3`
-
-	rows, err := t.db.Query(ctx, querySQL, email, limit, offset)
+	rows, err := t.db.Query(ctx, querySQL, queryArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("GetAllHistory query: %w", err)
 	}
@@ -286,33 +288,14 @@ func (t *TransactionRepo) GetAllHistory(ctx context.Context, email string, page,
 	for rows.Next() {
 		var h model.HistoryItem
 		if err := rows.Scan(
-			&h.ID, &h.Source, &h.Type, &h.Amount, &h.AdminFee,
-			&h.Status, &h.PaymentMethod, &h.Note, &h.WalletID, &h.CreatedAt,
+			&h.ID, &h.Source, &h.Type, &h.Direction, &h.Amount, &h.AdminFee,
+			&h.Status, &h.PaymentMethod, &h.Note, &h.WalletID, &h.WalletLabel, &h.CreatedAt,
 		); err != nil {
 			return nil, 0, fmt.Errorf("GetAllHistory scan: %w", err)
 		}
 		items = append(items, h)
 	}
 	return items, total, rows.Err()
-}
-
-// GetTransactionByID returns a single transaction verifying ownership.
-func (t *TransactionRepo) GetTransactionByID(ctx context.Context, email string, transactionID uuid.UUID) (model.Transaction, error) {
-	var tx model.Transaction
-	err := t.db.QueryRow(ctx, `
-		SELECT tr.id, tr.wallet_id, tr.type, tr.amount, tr.admin_fee, tr.status, tr.idempotency_key, tr.note, tr.created_at, tr.updated_at
-		FROM transactions tr
-		JOIN wallets w ON tr.wallet_id = w.id
-		JOIN users u ON w.user_id = u.id
-		WHERE u.email = $1 AND tr.id = $2`, email, transactionID,
-	).Scan(
-		&tx.ID, &tx.WalletID, &tx.Type, &tx.Amount,
-		&tx.AdminFee, &tx.Status, &tx.IdempotencyKey, &tx.Note, &tx.CreatedAt, &tx.UpdatedAt,
-	)
-	if err != nil {
-		return model.Transaction{}, fmt.Errorf("GetTransactionByID: %w", err)
-	}
-	return tx, nil
 }
 
 // CreateTopup creates a PENDING topup record.
@@ -606,19 +589,4 @@ func (t *TransactionRepo) SearchReceivers(
 	}
 
 	return results, total, rows.Err()
-}
-
-func scanTransactions(rows pgx.Rows) ([]model.Transaction, error) {
-	var result []model.Transaction
-	for rows.Next() {
-		var tx model.Transaction
-		if err := rows.Scan(
-			&tx.ID, &tx.WalletID, &tx.Type, &tx.Amount,
-			&tx.AdminFee, &tx.Status, &tx.IdempotencyKey, &tx.Note, &tx.CreatedAt, &tx.UpdatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("scanTransactions: %w", err)
-		}
-		result = append(result, tx)
-	}
-	return result, rows.Err()
 }

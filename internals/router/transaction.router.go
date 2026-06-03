@@ -21,9 +21,7 @@ func TransactionRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) 
 	g.GET("/receiver", txCont.FindReceivers)
 	g.GET("/summary", txCont.GetSummary)
 	g.GET("/report", txCont.GetTransactionReport)
-	g.GET("/history", txCont.GetHistory)   // unified: transactions + topups
-	g.GET("/", txCont.GetTransactions)     // ledger-only (legacy / internal)
-	g.GET("/:id", txCont.GetTransactionByID)
+	g.GET("/history", txCont.GetHistory) // unified paginated history feed
 
 	// Mutations — all require PIN in the request body
 	g.POST("/topup", txCont.CreateTopup)
