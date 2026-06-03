@@ -10,9 +10,7 @@ services:
     depends_on:
       - backend
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
+    image: ghcr.io/rivando-al-rasyid/vanwallet-backend:latest 
     container_name: vanwallet_backend
     restart: unless-stopped
     env_file:
