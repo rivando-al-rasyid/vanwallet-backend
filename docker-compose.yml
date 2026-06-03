@@ -1,8 +1,6 @@
 services:
   frontend:
-    build:
-      context: frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/rivando-al-rasyid/vanwallet-react:latest 
     restart: unless-stopped
     ports:
       - "80:80"
@@ -12,9 +10,7 @@ services:
       - vanwallet-network
 
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
+    image: ghcr.io/rivando-al-rasyid/vanwallet-backend:latest 
     container_name: vanwallet_backend
     restart: unless-stopped
     env_file:
