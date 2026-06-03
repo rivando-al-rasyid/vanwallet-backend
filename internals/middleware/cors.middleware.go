@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 
@@ -9,15 +10,39 @@ import (
 )
 
 func CORSMiddleware(ctx *gin.Context) {
-	// Tambahkan localhost ke dalam daftar origin yang diizinkan
-	allowedOrigin := []string{"http://127.0.0.1:5500", "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5500"}
+	// 1. Get the allowed origins from .env if defined, otherwise fall back to defaults
+	var allowedOrigins []string
+	if envOrigin := os.Getenv("ALLOWED_ORIGIN"); envOrigin != "" {
+		allowedOrigins = strings.Split(envOrigin, ",")
+	} else {
+		// Default origins combining your local dev ports and the new production/Docker port 80
+		allowedOrigins = []string{
+			"http://localhost",      // Docker frontend default
+			"http://127.0.0.1",      // Docker frontend alternate
+			"http://localhost:5173", // Vite local dev
+			"http://127.0.0.1:5173",
+			"http://localhost:5500", // Live Server local dev
+			"http://127.0.0.1:5500",
+			"http://127.0.0.1:8080",
+			"http://localhost:8080", // Live Server local dev
+
+		}
+	}
+
 	currentOrigin := ctx.GetHeader("Origin")
 
-	if slices.Contains(allowedOrigin, currentOrigin) {
+	if slices.Contains(allowedOrigins, currentOrigin) {
 		ctx.Header("Access-Control-Allow-Origin", currentOrigin)
 	}
 
-	allowedMethods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch, http.MethodOptions}
+	allowedMethods := []string{
+		http.MethodGet,
+		http.MethodPost,
+		http.MethodPut,
+		http.MethodDelete,
+		http.MethodPatch,
+		http.MethodOptions,
+	}
 	ctx.Header("Access-Control-Allow-Methods", strings.Join(allowedMethods, ", "))
 
 	// Sangat penting untuk mengizinkan Authorization karena frontend Anda mengirimkan Bearer Token
