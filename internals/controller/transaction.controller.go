@@ -583,7 +583,7 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        q      query     string  false  "Optional search keyword for full name or phone"
+// @Param        q      query     string  false  "Optional search keyword for name, email, phone, or wallet label"
 // @Param        page   query     int     false  "Page target number" default(1)
 // @Param        limit  query     int     false  "Data slice size boundary" default(10)
 // @Success      200    {object}  dto.Response{data=dto.ReceiverListResponse}
@@ -598,6 +598,9 @@ func (t *TransactionController) FindReceivers(ctx *gin.Context) {
 	}
 
 	query := ctx.Query("q")
+	if query == "" {
+		query = ctx.Query("query")
+	}
 
 	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(ctx.DefaultQuery("limit", "10"))
@@ -648,13 +651,19 @@ func (t *TransactionController) FindReceivers(ctx *gin.Context) {
 		resp = append(resp, item)
 	}
 
+	totalPages := 0
+	if limit > 0 {
+		totalPages = (total + limit - 1) / limit
+	}
+
 	ctx.JSON(http.StatusOK, dto.NewSuccess(
 		"Receivers fetched successfully",
 		dto.ReceiverListResponse{
-			Data:  resp,
-			Total: total,
-			Page:  page,
-			Limit: limit,
+			Data:       resp,
+			Total:      total,
+			Page:       page,
+			Limit:      limit,
+			TotalPages: totalPages,
 		},
 	))
 }

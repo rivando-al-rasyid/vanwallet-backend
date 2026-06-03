@@ -1,7 +1,7 @@
 package dto
 
 // ReceiverResult is a single search result for a potential transfer recipient.
-// Search is performed against full_name and phone number.
+// Search is performed against name, email, phone, wallet label, and wallet id.
 type ReceiverResult struct {
 	UserID      string `json:"user_id"`
 	Email       string `json:"email"`
@@ -14,8 +14,9 @@ type ReceiverResult struct {
 
 // ReceiverListResponse wraps a paginated receiver search result.
 type ReceiverListResponse struct {
-	Data  []ReceiverResult `json:"data"`
-	Total int              `json:"total"`
-	Page  int              `json:"page"`
-	Limit int              `json:"limit"`
+	Data       []ReceiverResult `json:"data"`
+	Total      int              `json:"total"`
+	Page       int              `json:"page"`
+	Limit      int              `json:"limit"`
+	TotalPages int              `json:"total_pages"`
 }
