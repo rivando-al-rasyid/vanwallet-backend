@@ -24,7 +24,6 @@ FROM alpine:3.23
 WORKDIR /app
 
 RUN apk add --no-cache \
-    ca-certificates \
     tzdata
 
 COPY --from=builder /vanwallet ./vanwallet
