@@ -1,9 +1,7 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/config"
@@ -48,10 +46,10 @@ func main() {
 	router.MainRouter(app, db, rc)
 	// run
 	// addr := fmt.Sprintf("%s:%s", os.Getenv("APP_HOST"), os.Getenv("APP_PORT"))
-	serverAddr := fmt.Sprintf("%s:%s", os.Getenv("APP_HOST"), os.Getenv("APP_PORT"))
+	// serverAddr := fmt.Sprintf("%s:%s", os.Getenv("APP_HOST"), os.Getenv("APP_PORT"))
 
-	if err := app.Run(serverAddr); err != nil {
-		log.Fatalf("Failed to start server on %s: %v", serverAddr, err)
+	if err := app.Run("0.0.0.0:8080"); err != nil {
+		log.Fatalf("Failed to start server %v", err)
 	}
 
 }
