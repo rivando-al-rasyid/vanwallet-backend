@@ -1,22 +1,28 @@
 services:
   frontend:
-    image: ghcr.io/rivando-al-rasyid/vanwallet-react:latest 
+    build:
+      context: ../frontend
+    image: vanwallet-react:local
+    container_name: vanwallet_frontend
     restart: unless-stopped
     ports:
       - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_started
     networks:
       - vanwallet-network
 
   backend:
-    image: ghcr.io/rivando-al-rasyid/vanwallet-backend:latest 
+    build:
+      context: .
+    image: vanwallet-backend:local
     container_name: vanwallet_backend
     restart: unless-stopped
     env_file:
       - .env
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     depends_on:
       migration:
         condition: service_completed_successfully
@@ -37,33 +43,35 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASS}
       POSTGRES_DB: ${DB_NAME}
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
-      interval: 2s
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
       timeout: 10s
-      retries: 5
+      retries: 10
     networks:
       - vanwallet-network
 
   migration:
     image: migrate/migrate:v4.18.3
     container_name: vanwallet_migration
+    restart: "no"
     env_file:
       - .env
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
-      - ./database/migrations:/migrations
-    command: [
-      "-path", "/migrations",
-      "-database", "postgres://${DB_USER}:${DB_PASS}@postgres:5432/${DB_NAME}?sslmode=disable",
-      "up"
-    ]
+      - ./database/migrations:/migrations:ro
+    command:
+      [
+        "-path", "/migrations",
+        "-database", "postgres://${DB_USER}:${DB_PASS}@postgres:5432/${DB_NAME}?sslmode=disable",
+        "up"
+      ]
     networks:
       - vanwallet-network
 
@@ -71,11 +79,13 @@ services:
     image: redis:7-alpine
     container_name: vanwallet_redis
     restart: unless-stopped
+    expose:
+      - "6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 2s
+      interval: 3s
       timeout: 10s
-      retries: 5
+      retries: 10
     networks:
       - vanwallet-network
 

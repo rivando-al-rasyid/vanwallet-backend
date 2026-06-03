@@ -9,5 +9,6 @@ type UserInfoResponse struct {
 	Phone          *string `json:"phone,omitempty"`
 	Photo          *string `json:"photo,omitempty"`
 	CurrentBalance int64   `json:"current_balance"`
+	WalletID       string  `json:"wallet_id,omitempty"`
 	PinHash        string  `json:"pin_hash"`
 }

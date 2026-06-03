@@ -14,6 +14,7 @@ import (
 
 type TransactionRepository interface {
 	VerifyPIN(ctx context.Context, email, rawPin string) error
+	WalletBelongsToUser(ctx context.Context, email string, walletID uuid.UUID) (bool, error)
 	GetSummary(ctx context.Context, email string) (model.TransactionSummary, error)
 	GetTransactionReport(ctx context.Context, email, rangeParam, typeFilter string) ([]model.ChartPoint, error)
 	GetTransactionsByWallet(ctx context.Context, email string, walletID uuid.UUID, page, limit int) ([]model.Transaction, int, error)
@@ -21,7 +22,7 @@ type TransactionRepository interface {
 	GetAllHistory(ctx context.Context, email string, page, limit int) ([]model.HistoryItem, int, error)
 	GetTransactionByID(ctx context.Context, email string, transactionID uuid.UUID) (model.Transaction, error)
 	CreateTopup(ctx context.Context, req model.Topup) (model.Topup, error)
-	ConfirmTopup(ctx context.Context, topupID uuid.UUID) (model.Topup, error)
+	ConfirmTopup(ctx context.Context, email string, topupID uuid.UUID) (model.Topup, error)
 	CreateWithdrawal(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, bank model.Withdrawal) (model.Transaction, error)
 	CreateTransfer(ctx context.Context, senderWalletID, recipientWalletID uuid.UUID, amount, adminFee int64, note *string) (model.Transfer, model.Transaction, model.Transaction, error)
 	CreateExpense(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, category, merchantName, note *string) (model.Transaction, error)
@@ -40,6 +41,10 @@ func NewTransactionService(repo TransactionRepository, rdb *redis.Client) *Trans
 // VerifyPIN checks the stored argon2 PIN hash against rawPin before committing any sensitive operation.
 func (s *TransactionService) VerifyPIN(ctx context.Context, email, rawPin string) error {
 	return s.repo.VerifyPIN(ctx, email, rawPin)
+}
+
+func (s *TransactionService) WalletBelongsToUser(ctx context.Context, email string, walletID uuid.UUID) (bool, error) {
+	return s.repo.WalletBelongsToUser(ctx, email, walletID)
 }
 
 func (s *TransactionService) GetSummary(ctx context.Context, email string) (model.TransactionSummary, error) {
@@ -95,8 +100,8 @@ func (s *TransactionService) CreateTopup(ctx context.Context, req model.Topup) (
 	return s.repo.CreateTopup(ctx, req)
 }
 
-func (s *TransactionService) ConfirmTopup(ctx context.Context, topupID uuid.UUID) (model.Topup, error) {
-	return s.repo.ConfirmTopup(ctx, topupID)
+func (s *TransactionService) ConfirmTopup(ctx context.Context, email string, topupID uuid.UUID) (model.Topup, error) {
+	return s.repo.ConfirmTopup(ctx, email, topupID)
 }
 
 func (s *TransactionService) CreateWithdrawal(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, bank model.Withdrawal) (model.Transaction, error) {

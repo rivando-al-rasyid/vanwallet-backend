@@ -25,7 +25,7 @@ func NewTransactionRepo(db *pgxpool.Pool) *TransactionRepo {
 func (t *TransactionRepo) VerifyPIN(ctx context.Context, email, rawPin string) error {
 	var pinHash string
 	err := t.db.QueryRow(ctx, `
-		SELECT up.pin_hash
+		SELECT COALESCE(up.pin_hash, '')
 		FROM user_pins up
 		JOIN users u ON up.user_id = u.id
 		WHERE u.email = $1`, email,
@@ -36,12 +36,32 @@ func (t *TransactionRepo) VerifyPIN(ctx context.Context, email, rawPin string) e
 		}
 		return fmt.Errorf("VerifyPIN query: %w", err)
 	}
+	if pinHash == "" {
+		return errors.New("pin not set")
+	}
 	var hc pkg.HashConfig
 	hc.UseRecommended()
 	if err := hc.Compare(rawPin, pinHash); err != nil {
 		return errors.New("invalid pin")
 	}
 	return nil
+}
+
+// WalletBelongsToUser returns true when walletID is owned by the user identified by email.
+func (t *TransactionRepo) WalletBelongsToUser(ctx context.Context, email string, walletID uuid.UUID) (bool, error) {
+	var exists bool
+	err := t.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM wallets w
+			JOIN users u ON w.user_id = u.id
+			WHERE u.email = $1 AND w.id = $2
+		)`, email, walletID,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("WalletBelongsToUser: %w", err)
+	}
+	return exists, nil
 }
 
 // GetSummary returns aggregated balance, income, expense, and per-wallet breakdown.
@@ -321,7 +341,7 @@ func (t *TransactionRepo) CreateTopup(ctx context.Context, req model.Topup) (mod
 }
 
 // ConfirmTopup sets topup to SUCCESS and credits the wallet atomically.
-func (t *TransactionRepo) ConfirmTopup(ctx context.Context, topupID uuid.UUID) (model.Topup, error) {
+func (t *TransactionRepo) ConfirmTopup(ctx context.Context, email string, topupID uuid.UUID) (model.Topup, error) {
 	tx, err := t.db.Begin(ctx)
 	if err != nil {
 		return model.Topup{}, fmt.Errorf("ConfirmTopup begin tx: %w", err)
@@ -329,10 +349,16 @@ func (t *TransactionRepo) ConfirmTopup(ctx context.Context, topupID uuid.UUID) (
 	defer tx.Rollback(ctx) //nolint:errcheck
 	var topup model.Topup
 	err = tx.QueryRow(ctx, `
-		UPDATE topups SET status = 'SUCCESS', updated_at = now()
-		WHERE id = $1 AND status = 'PENDING'
-		RETURNING id, wallet_id, amount, status, payment_method, external_reference, created_at`,
-		topupID,
+		UPDATE topups tp
+		SET status = 'SUCCESS', updated_at = now()
+		FROM wallets w
+		JOIN users u ON w.user_id = u.id
+		WHERE tp.wallet_id = w.id
+		  AND tp.id = $1
+		  AND u.email = $2
+		  AND tp.status = 'PENDING'
+		RETURNING tp.id, tp.wallet_id, tp.amount, tp.status, tp.payment_method, tp.external_reference, tp.created_at`,
+		topupID, email,
 	).Scan(&topup.ID, &topup.WalletID, &topup.Amount, &topup.Status, &topup.PaymentMethod, &topup.ExternalReference, &topup.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -416,7 +442,8 @@ func (t *TransactionRepo) CreateTransfer(ctx context.Context, senderWalletID, re
 	if senderBalance < amount+adminFee {
 		return model.Transfer{}, model.Transaction{}, model.Transaction{}, errors.New("insufficient balance")
 	}
-	if _, err = tx.Exec(ctx, `SELECT id FROM wallets WHERE id = $1 FOR UPDATE`, recipientWalletID); err != nil {
+	var lockedRecipientID uuid.UUID
+	if err = tx.QueryRow(ctx, `SELECT id FROM wallets WHERE id = $1 FOR UPDATE`, recipientWalletID).Scan(&lockedRecipientID); err != nil {
 		return model.Transfer{}, model.Transaction{}, model.Transaction{}, fmt.Errorf("CreateTransfer lock recipient: %w", err)
 	}
 

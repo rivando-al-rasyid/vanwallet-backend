@@ -13,6 +13,7 @@ type Profile struct {
 	Phone     *string    `db:"phone"`
 	Photo     *string    `db:"photo"`
 	PinHash   string     `db:"pin_hash"`
+	WalletID  uuid.UUID  `db:"wallet_id"`
 	CreatedAt time.Time  `db:"created_at"`
 	UpdatedAt *time.Time `db:"updated_at"`
 }

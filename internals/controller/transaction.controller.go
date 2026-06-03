@@ -62,6 +62,19 @@ func (t *TransactionController) checkPIN(ctx *gin.Context, email, pin string) bo
 	return true
 }
 
+func (t *TransactionController) checkWalletOwnership(ctx *gin.Context, email string, walletID uuid.UUID) bool {
+	owned, err := t.transactionService.WalletBelongsToUser(ctx.Request.Context(), email, walletID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, dto.NewError("Wallet validation failed", "Internal server error"))
+		return false
+	}
+	if !owned {
+		ctx.JSON(http.StatusForbidden, dto.NewError("Wallet access denied", "wallet_id does not belong to the authenticated user"))
+		return false
+	}
+	return true
+}
+
 func historyDirection(txType string) string {
 	switch txType {
 	case "TOPUP", "TRANSFER_IN":
@@ -101,7 +114,7 @@ func historyTitle(h model.HistoryItem) string {
 // @Success      200            {object}  dto.Response{data=dto.SummaryResponse}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
-// @Router       /transactions/summary [get]
+// @Router       /transaction/summary [get]
 func (t *TransactionController) GetSummary(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -133,7 +146,7 @@ func (t *TransactionController) GetSummary(ctx *gin.Context) {
 // @Failure      400            {object}  dto.Response{error}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
-// @Router       /transactions/report [get]
+// @Router       /transaction/report [get]
 func (t *TransactionController) GetTransactionReport(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -186,7 +199,7 @@ func (t *TransactionController) GetTransactionReport(ctx *gin.Context) {
 // @Failure      400            {object}  dto.Response{error}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
-// @Router       /transactions [get]
+// @Router       /transaction [get]
 func (t *TransactionController) GetTransactions(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -239,7 +252,7 @@ func (t *TransactionController) GetTransactions(ctx *gin.Context) {
 // @Success      200            {object}  dto.Response{data=dto.HistoryListResponse}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
-// @Router       /transactions/history [get]
+// @Router       /transaction/history [get]
 func (t *TransactionController) GetHistory(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -291,7 +304,7 @@ func (t *TransactionController) GetHistory(ctx *gin.Context) {
 // @Failure      400            {object}  dto.Response{error}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      404            {object}  dto.Response{error}
-// @Router       /transactions/{id} [get]
+// @Router       /transaction/{id} [get]
 func (t *TransactionController) GetTransactionByID(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -323,7 +336,7 @@ func (t *TransactionController) GetTransactionByID(ctx *gin.Context) {
 // @Failure      400            {object}  dto.Response{error}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
-// @Router       /transactions/topup [post]
+// @Router       /transaction/topup [post]
 func (t *TransactionController) CreateTopup(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -341,6 +354,9 @@ func (t *TransactionController) CreateTopup(ctx *gin.Context) {
 	walletID, err := uuid.Parse(body.WalletID)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid wallet_id", "wallet_id must be a valid UUID"))
+		return
+	}
+	if !t.checkWalletOwnership(ctx, email, walletID) {
 		return
 	}
 	pm := model.PaymentMethod(body.PaymentMethod)
@@ -381,9 +397,9 @@ func (t *TransactionController) CreateTopup(ctx *gin.Context) {
 // @Failure      400            {object}  dto.Response{error}
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      404            {object}  dto.Response{error}
-// @Router       /transactions/topup/{id}/confirm [post]
+// @Router       /transaction/topup/{id}/confirm [patch]
 func (t *TransactionController) ConfirmTopup(ctx *gin.Context) {
-	_, ok := claimsEmail(ctx)
+	email, ok := claimsEmail(ctx)
 	if !ok {
 		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
 		return
@@ -393,7 +409,7 @@ func (t *TransactionController) ConfirmTopup(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid topup id", "id must be a valid UUID"))
 		return
 	}
-	topup, err := t.transactionService.ConfirmTopup(ctx.Request.Context(), topupID)
+	topup, err := t.transactionService.ConfirmTopup(ctx.Request.Context(), email, topupID)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, dto.NewError("Failed to confirm top-up", err.Error()))
 		return
@@ -422,7 +438,7 @@ func (t *TransactionController) ConfirmTopup(ctx *gin.Context) {
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      422            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
-// @Router       /transactions/withdraw [post]
+// @Router       /transaction/withdrawal [post]
 func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -440,6 +456,9 @@ func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 	walletID, err := uuid.Parse(body.WalletID)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid wallet_id", "wallet_id must be a valid UUID"))
+		return
+	}
+	if !t.checkWalletOwnership(ctx, email, walletID) {
 		return
 	}
 	const withdrawalAdminFee int64 = 6500
@@ -474,7 +493,7 @@ func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      422            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
-// @Router       /transactions/transfer [post]
+// @Router       /transaction/transfer [post]
 func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -492,6 +511,9 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 	senderWalletID, err := uuid.Parse(body.SenderWalletID)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid sender_wallet_id", "must be a valid UUID"))
+		return
+	}
+	if !t.checkWalletOwnership(ctx, email, senderWalletID) {
 		return
 	}
 	recipientWalletID, err := uuid.Parse(body.RecipientWalletID)
@@ -542,7 +564,7 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 // @Failure      401            {object}  dto.Response{error}
 // @Failure      422            {object}  dto.Response{error}
 // @Failure      500            {object}  dto.Response{error}
-// @Router       /transactions/expense [post]
+// @Router       /transaction/expense [post]
 func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
@@ -560,6 +582,9 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 	walletID, err := uuid.Parse(body.WalletID)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid wallet_id", "wallet_id must be a valid UUID"))
+		return
+	}
+	if !t.checkWalletOwnership(ctx, email, walletID) {
 		return
 	}
 	var category, merchantName *string
@@ -606,7 +631,7 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 // @Success      200    {object}  dto.Response{data=dto.ReceiverListResponse}
 // @Failure      401    {object}  dto.Response{error}
 // @Failure      500    {object}  dto.Response{error}
-// @Router       /transactions/receivers [get]
+// @Router       /transaction/receiver [get]
 func (t *TransactionController) FindReceivers(ctx *gin.Context) {
 	email, ok := claimsEmail(ctx)
 	if !ok {
