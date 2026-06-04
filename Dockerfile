@@ -1,31 +1,34 @@
-FROM golang:1.26.4-alpine3.22 AS builder
+FROM golang:1.26.3-alpine3.23 AS builder
+
 WORKDIR /app
+
+# Install git for fetching dependencies (if needed)
 RUN apk add --no-cache git
+
+# Cache Go modules dependency downloads
 COPY go.mod go.sum ./
 RUN go mod download
+
+# Copy the rest of the source code
 COPY . .
+
+# Build the binary within the /app directory
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -trimpath \
     -ldflags="-s -w" \
-    -o /vanwallet \
+    -o ./vanwallet \
     ./cmd/main.go
 
-FROM alpine:3.22
+FROM alpine:3.23
+
 WORKDIR /app
 
-RUN apk add --no-cache \
-    tzdata \
-    ca-certificates \
-    && addgroup -S appgroup \
-    && adduser -S appuser -G appgroup
+RUN apk add --no-cache tzdata
 
-COPY --from=builder /vanwallet ./vanwallet
+# Copy artifacts from the builder stage
+COPY --from=builder /app/vanwallet ./vanwallet
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/docs ./docs
-
-RUN chown -R appuser:appgroup /app
-
-USER appuser
 
 EXPOSE 8080
+
 CMD ["./vanwallet"]
