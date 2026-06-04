@@ -10,7 +10,7 @@ RUN go mod download
 
 COPY . .
 
-RUN GOOS=linux go build \
+RUN CGO_ENABLED=0 GOOS=linux go build \
     -trimpath \
     -ldflags="-s -w" \
     -o ./vanwallet \
