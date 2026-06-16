@@ -11,8 +11,8 @@ import (
 )
 
 func MainRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) {
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 	router.Use(middleware.CORSMiddleware)
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 	router.Static("/img", "public/img")
 	AuthRouter(router, db, rdb)
 	ProfileRouter(router, db)
