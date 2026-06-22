@@ -145,6 +145,51 @@ func (p *ProfileController) EditProfile(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, dto.NewSuccessNoData("Profile successfully updated"))
 }
 
+// EditPin godoc
+// @Summary      Create or update user PIN
+// @Description  Sets the first PIN when no PIN exists. If a PIN already exists, old_pin is required before replacing it.
+// @Tags         Profile
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      dto.SetPinRequest  true  "PIN payload"
+// @Success      200   {object}  dto.Response       "PIN successfully updated"
+// @Failure      400   {object}  dto.Response       "Invalid request body or old PIN required"
+// @Failure      401   {object}  dto.Response       "Unauthorized or old PIN is incorrect"
+// @Failure      404   {object}  dto.Response       "User not found"
+// @Failure      500   {object}  dto.Response       "Internal server error"
+// @Router       /profile/change/pin [patch]
+func (p *ProfileController) EditPin(ctx *gin.Context) {
+	email, ok := pkg.CurrentUserEmail(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", errors.New("missing user context")))
+		return
+	}
+
+	var body dto.SetPinRequest
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err))
+		return
+	}
+
+	_, err := p.profileservice.EditPin(ctx.Request.Context(), email, body)
+	if err != nil {
+		switch err.Error() {
+		case "pin must be exactly 6 numeric digits", "old pin is required":
+			ctx.JSON(http.StatusBadRequest, dto.NewError("Failed to update PIN", err))
+		case "old pin is incorrect":
+			ctx.JSON(http.StatusUnauthorized, dto.NewError("Failed to update PIN", err))
+		case "user not found":
+			ctx.JSON(http.StatusNotFound, dto.NewError("Failed to update PIN", err))
+		default:
+			ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to update PIN", errors.New("internal server error")))
+		}
+		return
+	}
+
+	ctx.JSON(http.StatusOK, dto.NewSuccessNoData("PIN successfully updated"))
+}
+
 // EditPassword godoc
 // @Summary      Update profile password
 // @Description  Changes the current user's password after validating the old password.
@@ -214,10 +259,12 @@ func (p *ProfileController) GetUserInfo(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, dto.NewSuccess("User info successfully retrieved", dto.UserInfoResponse{
-		ID:       userID.String(),
-		Email:    email,
-		FullName: profile.FullName,
-		Phone:    profile.Phone,
-		Photo:    profile.Photo,
+		ID:             userID.String(),
+		Email:          email,
+		FullName:       profile.FullName,
+		Phone:          profile.Phone,
+		Photo:          profile.Photo,
+		CurrentBalance: profile.CurrentBalance,
+		PinHash:        profile.PinHash,
 	}))
 }

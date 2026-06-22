@@ -127,6 +127,57 @@ func (p *ProfileRepo) EditPassword(ctx context.Context, email string, newPasswor
 	return user, nil
 }
 
+func (p *ProfileRepo) GetCurrentPin(ctx context.Context, email string) (string, error) {
+	var pinHash string
+	err := p.db.QueryRow(ctx, `
+		SELECT COALESCE(up.pin_hash, '')
+		FROM users u
+		LEFT JOIN user_pins up ON up.user_id = u.id
+		WHERE u.email = $1
+		LIMIT 1`, email,
+	).Scan(&pinHash)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", errors.New("user not found")
+		}
+		return "", fmt.Errorf("GetCurrentPin: %w", err)
+	}
+	return pinHash, nil
+}
+
+func (p *ProfileRepo) EditPin(ctx context.Context, email string, hashedPin string) (model.UserPin, error) {
+	var userPin model.UserPin
+	err := p.db.QueryRow(ctx, `
+		INSERT INTO user_pins (user_id, pin_hash, failed_attempts, locked_until)
+		SELECT id, $2, 0, NULL
+		FROM users
+		WHERE email = $1
+		ON CONFLICT (user_id) DO UPDATE SET
+			pin_hash = EXCLUDED.pin_hash,
+			failed_attempts = 0,
+			locked_until = NULL,
+			updated_at = NOW()
+		RETURNING id, user_id, pin_hash, failed_attempts, locked_until, created_at, updated_at`,
+		email,
+		hashedPin,
+	).Scan(
+		&userPin.ID,
+		&userPin.UserID,
+		&userPin.PinHash,
+		&userPin.FailedAttempts,
+		&userPin.LockedUntil,
+		&userPin.CreatedAt,
+		&userPin.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.UserPin{}, errors.New("user not found")
+		}
+		return model.UserPin{}, fmt.Errorf("EditPin: %w", err)
+	}
+	return userPin, nil
+}
+
 // GetUserInfo returns profile + total wallet balance in a single query.
 // Used for the app header (avatar, name, balance).
 func (p *ProfileRepo) GetUserInfo(ctx context.Context, email string) (model.Profile, error) {
@@ -136,12 +187,26 @@ func (p *ProfileRepo) GetUserInfo(ctx context.Context, email string) (model.Prof
 		SELECT
 			p.full_name,
 			p.phone,
-			p.photo
-		FROM profiles p
-		JOIN users u ON p.user_id = u.id
+			p.photo,
+			COALESCE(SUM(w.balance), 0) AS current_balance,
+			CASE
+				WHEN COALESCE(up.pin_hash, '') = '' THEN NULL
+				ELSE 'set'
+			END AS pin_hash
+		FROM users u
+		JOIN profiles p ON p.user_id = u.id
+		LEFT JOIN wallets w ON w.user_id = u.id
+		LEFT JOIN user_pins up ON up.user_id = u.id
 		WHERE u.email = $1
+		GROUP BY p.full_name, p.phone, p.photo, up.pin_hash
 		LIMIT 1`, email,
-	).Scan(&profile.FullName, &profile.Phone, &profile.Photo)
+	).Scan(
+		&profile.FullName,
+		&profile.Phone,
+		&profile.Photo,
+		&profile.CurrentBalance,
+		&profile.PinHash,
+	)
 
 	if err != nil {
 		return model.Profile{}, err

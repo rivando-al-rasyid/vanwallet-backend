@@ -22,5 +22,6 @@ func ProfileRouter(router *gin.Engine, db *pgxpool.Pool) {
 	// Full profile CRUD
 	profileRouter.GET("/", profCont.GetProfile)
 	profileRouter.PATCH("/edit", profCont.EditProfile)
+	profileRouter.PATCH("/change/pin", profCont.EditPin)
 	profileRouter.PATCH("/change/password", profCont.EditPassword)
 }
