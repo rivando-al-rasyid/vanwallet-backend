@@ -5,6 +5,7 @@ projects:
     environments:
       - name: Production
         services:
+          # ── Backend ─────────────────────────────────────
           - type: web
             name: vanwallet-backend
             runtime: docker
@@ -35,6 +36,20 @@ projects:
               - key: JWT_SECRET
                 sync: false
 
+          # ── Frontend ────────────────────────────────────
+          - type: web
+            name: vanwallet-frontend
+            runtime: static
+            repo: https://github.com/rivando-al-rasyid/vanwallet-frontend
+            plan: free
+            region: singapore
+            buildCommand: npm install && npm run build
+            autoDeployTrigger: commit
+            envVars:
+              - key: VITE_API_URL
+                value: https://vanwallet-backend.onrender.com
+
+          # ── Redis ───────────────────────────────────────
           - type: redis
             name: vanwallet-redis
             plan: free
