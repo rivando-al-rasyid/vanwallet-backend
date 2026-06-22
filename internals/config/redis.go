@@ -9,7 +9,10 @@ import (
 )
 
 func ConnectRedis() (*redis.Client, error) {
-	redisAddr := os.Getenv("RDB_ADDR")
+	redisAddr := strings.TrimSpace(os.Getenv("REDIS_URL"))
+	if redisAddr == "" {
+		redisAddr = strings.TrimSpace(os.Getenv("RDB_ADDR"))
+	}
 
 	var opt *redis.Options
 	var err error
@@ -29,8 +32,8 @@ func ConnectRedis() (*redis.Client, error) {
 
 	rc := redis.NewClient(opt)
 
-	err = rc.Ping(context.Background()).Err()
-	if err != nil {
+	if err := rc.Ping(context.Background()).Err(); err != nil {
+		rc.Close()
 		return nil, err
 	}
 
