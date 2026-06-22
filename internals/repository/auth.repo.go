@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/model"
@@ -19,15 +21,17 @@ func NewAuthRepo(db *pgxpool.Pool) *Authrepo {
 	return &Authrepo{db: db}
 }
 
-// Register creates a user, profile, user_pin, and wallet atomically in one transaction.
+// Register creates a user, profile,  and wallet atomically in one transaction.
 func (a *Authrepo) Register(ctx context.Context, email, hashpwd string) (model.User, error) {
 	tx, err := a.db.Begin(ctx)
 	if err != nil {
 		return model.User{}, fmt.Errorf("Register begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 	var user model.User
+
 	err = tx.QueryRow(ctx,
 		`INSERT INTO users (email, password) VALUES ($1, $2)
 		 RETURNING id, email, created_at`,
@@ -37,27 +41,20 @@ func (a *Authrepo) Register(ctx context.Context, email, hashpwd string) (model.U
 		return model.User{}, fmt.Errorf("Register insert user: %w", err)
 	}
 
+	fullName := strings.Split(email, "@")[0]
+
 	if _, err = tx.Exec(ctx,
-		`INSERT INTO profiles (user_id) VALUES ($1)`, user.ID,
+		`INSERT INTO profiles (user_id, full_name) VALUES ($1, $2)`,
+		user.ID,
+		fullName,
 	); err != nil {
 		return model.User{}, fmt.Errorf("Register insert profile: %w", err)
-	}
-
-	if _, err = tx.Exec(ctx,
-		`INSERT INTO user_pins (user_id, pin_hash) VALUES ($1, NULL)`, user.ID,
-	); err != nil {
-		return model.User{}, fmt.Errorf("Register insert user_pin: %w", err)
-	}
-
-	if _, err = tx.Exec(ctx,
-		`INSERT INTO wallets (user_id) VALUES ($1)`, user.ID,
-	); err != nil {
-		return model.User{}, fmt.Errorf("Register insert wallet: %w", err)
 	}
 
 	if err = tx.Commit(ctx); err != nil {
 		return model.User{}, fmt.Errorf("Register commit: %w", err)
 	}
+
 	return user, nil
 }
 
@@ -72,25 +69,8 @@ func (a *Authrepo) Login(ctx context.Context, email string) (model.User, error) 
 	return user, nil
 }
 
-func (a *Authrepo) GetUserPin(ctx context.Context, email string) (model.UserPin, error) {
-	var userpin model.UserPin
-	err := a.db.QueryRow(ctx, `
-		SELECT up.pin_hash
-		FROM user_pins up
-		JOIN users u ON up.user_id = u.id
-		WHERE u.email = $1`, email,
-	).Scan(&userpin.PinHash)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return model.UserPin{}, errors.New("user pin not found")
-		}
-		return model.UserPin{}, err
-	}
-	return userpin, nil
-}
-
 // SaveToken inserts a new token row into the tokens table.
-func (a *Authrepo) SaveToken(ctx context.Context, userID, rawToken string, tokenType model.TokenType, expiresAt time.Time) error {
+func (a *Authrepo) SaveToken(ctx context.Context, userID uuid.UUID, rawToken string, tokenType model.TokenType, expiresAt time.Time) error {
 	_, err := a.db.Exec(ctx,
 		`INSERT INTO tokens (user_id, token, type, expires_at)
 		 VALUES ($1, $2, $3, $4)
@@ -165,9 +145,8 @@ func (a *Authrepo) GetUserByResetToken(ctx context.Context, rawToken string) (mo
 	return user, nil
 }
 
-
 // UpdatePassword sets a new hashed password for the given user ID.
-func (a *Authrepo) UpdatePassword(ctx context.Context, userID, hashedPassword string) error {
+func (a *Authrepo) UpdatePassword(ctx context.Context, userID uuid.UUID, hashedPassword string) error {
 	result, err := a.db.Exec(ctx,
 		`UPDATE users SET password = $1 ,updated_at = NOW() WHERE id = $2`,
 		hashedPassword, userID,

@@ -1,11 +1,9 @@
 package middleware
 
 import (
-	"context"
 	"errors"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -15,86 +13,135 @@ import (
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/repository"
 )
 
-// extractAndVerifyBearer is a shared helper that:
-//  1. Reads the Authorization header and validates the "Bearer <token>" format.
-//  2. Verifies the JWT signature and expiry via pkg.Claims.VerifyJWT.
-//
-// On success it returns the raw token string and the parsed claims.
-// On failure it writes an appropriate JSON error to ctx and returns a non-nil error
-// so callers can simply do `if err != nil { return }`.
-func extractAndVerifyBearer(ctx *gin.Context, logTag string) (string, pkg.Claims, error) {
-	bearerToken := ctx.GetHeader("Authorization")
-	if bearerToken == "" {
-		ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing Authorization header"))
-		return "", pkg.Claims{}, errors.New("missing header")
+func extractAndVerifyToken(ctx *gin.Context, logTag string, allowCookie bool) (string, pkg.Claims, error) {
+	rawToken, err := pkg.ExtractRequestToken(ctx, allowCookie)
+	if err != nil {
+		ctx.AbortWithStatusJSON(
+			http.StatusUnauthorized,
+			dto.NewError("Unauthorized", err),
+		)
+
+		return "", pkg.Claims{}, err
 	}
 
-	parts := strings.Split(bearerToken, " ")
-	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-		ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Invalid token format, use: Bearer <token>"))
-		return "", pkg.Claims{}, errors.New("invalid format")
-	}
-	rawToken := parts[1]
-
-	var claims pkg.Claims
-	if err := claims.VerifyJWT(rawToken); err != nil {
+	claims, err := pkg.VerifyRawJWT(rawToken)
+	if err != nil {
 		log.Printf("[%s] JWT error: %v", logTag, err)
-		if errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenInvalidIssuer) {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewError("Unauthorized", err.Error()))
-			return "", pkg.Claims{}, err
+
+		switch {
+		case errors.Is(err, jwt.ErrTokenExpired):
+			ctx.AbortWithStatusJSON(
+				http.StatusUnauthorized,
+				dto.NewError("Token expired", err),
+			)
+
+		case errors.Is(err, jwt.ErrTokenInvalidIssuer):
+			ctx.AbortWithStatusJSON(
+				http.StatusUnauthorized,
+				dto.NewError("Invalid token issuer", err),
+			)
+
+		default:
+			ctx.AbortWithStatusJSON(
+				http.StatusUnauthorized,
+				dto.NewError("Invalid token", errors.New("invalid token")),
+			)
 		}
-		ctx.AbortWithStatusJSON(http.StatusInternalServerError, dto.NewError("Error", "Internal server error"))
+
 		return "", pkg.Claims{}, err
 	}
 
 	return rawToken, claims, nil
 }
 
-// VerifyTokenWithDB validates the JWT signature and checks the tokens table
-// (token must exist, is_revoked = false, expires_at > now()).
-func VerifyTokenWithDB(db *pgxpool.Pool) gin.HandlerFunc {
+// AuthRequired validates normal access JWT and checks the tokens table.
+// The token can come from either Authorization: Bearer <token> or the
+// HttpOnly access_token cookie used by the React Router data-mode frontend.
+func AuthRequired(db *pgxpool.Pool) gin.HandlerFunc {
 	authRepo := repository.NewAuthRepo(db)
 
 	return func(ctx *gin.Context) {
-		rawToken, claims, err := extractAndVerifyBearer(ctx, "VerifyToken")
+		rawToken, claims, err := extractAndVerifyToken(ctx, "AuthRequired", true)
 		if err != nil {
 			return
 		}
 
-		valid, err := authRepo.IsTokenValid(context.Background(), rawToken)
-		if err != nil {
-			log.Println("[VerifyToken] DB token check error:", err)
-			ctx.AbortWithStatusJSON(http.StatusInternalServerError, dto.NewError("Error", "Internal server error"))
+		if claims.Subject != pkg.AccessTokenSubject {
+			ctx.AbortWithStatusJSON(
+				http.StatusForbidden,
+				dto.NewError(
+					"Forbidden",
+					errors.New("this token cannot be used for normal access"),
+				),
+			)
+
 			return
 		}
+
+		valid, err := authRepo.IsTokenValid(ctx.Request.Context(), rawToken)
+		if err != nil {
+			log.Println("[AuthRequired] DB token check error:", err)
+
+			ctx.AbortWithStatusJSON(
+				http.StatusInternalServerError,
+				dto.NewError("Error", errors.New("internal server error")),
+			)
+
+			return
+		}
+
 		if !valid {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewError("Token has been revoked or expired, please login again", "Token invalid"))
+			ctx.AbortWithStatusJSON(
+				http.StatusUnauthorized,
+				dto.NewError(
+					"Token has been revoked or expired, please login again",
+					errors.New("token invalid"),
+				),
+			)
+
 			return
 		}
 
-		ctx.Set("claims", claims)
-		ctx.Set("raw_token", rawToken)
+		pkg.SetAuthContext(ctx, rawToken, claims)
+
 		ctx.Next()
 	}
 }
 
-// VerifyResetToken validates a JWT issued by ConfirmResetPassword.
-// It enforces sub == pkg.ResetTokenSubject so that a normal access token
-// cannot be used to reach the change-password endpoint.
-// Reset JWTs are not stored in the tokens table, so no DB lookup is needed.
-func VerifyResetToken() gin.HandlerFunc {
+// PasswordResetRequired validates a JWT issued for reset password.
+// Reset JWTs should be sent explicitly through Authorization: Bearer <token>,
+// not the access_token cookie.
+func PasswordResetRequired() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		_, claims, err := extractAndVerifyBearer(ctx, "VerifyResetToken")
+		_, claims, err := extractAndVerifyToken(ctx, "PasswordResetRequired", false)
 		if err != nil {
 			return
 		}
 
 		if claims.Subject != pkg.ResetTokenSubject {
-			ctx.AbortWithStatusJSON(http.StatusForbidden, dto.NewError("Forbidden", "This token cannot be used for this operation"))
+			ctx.AbortWithStatusJSON(
+				http.StatusForbidden,
+				dto.NewError(
+					"Forbidden",
+					errors.New("this token cannot be used for password reset"),
+				),
+			)
+
 			return
 		}
 
-		ctx.Set("claims", claims)
+		pkg.SetAuthContext(ctx, "", claims)
+
 		ctx.Next()
 	}
+}
+
+// VerifyTokenWithDB is kept for compatibility. Prefer AuthRequired in routers.
+func VerifyTokenWithDB(db *pgxpool.Pool) gin.HandlerFunc {
+	return AuthRequired(db)
+}
+
+// VerifyResetToken is kept for compatibility. Prefer PasswordResetRequired in routers.
+func VerifyResetToken() gin.HandlerFunc {
+	return PasswordResetRequired()
 }

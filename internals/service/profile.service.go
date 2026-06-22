@@ -13,12 +13,10 @@ import (
 
 type ProfileRepository interface {
 	UserProfile(ctx context.Context, email string) (model.Profile, error)
-	GetUserInfo(ctx context.Context, email string) (model.Profile, int64, error)
+	GetUserInfo(ctx context.Context, email string) (model.Profile, error)
 	EditProfile(ctx context.Context, email string, updates map[string]any) (model.Profile, error)
-	EditPin(ctx context.Context, email string, newPin string) (model.UserPin, error)
 	EditPassword(ctx context.Context, email string, newPassword string) (model.User, error)
 	GetCurrentPassword(ctx context.Context, email string) (string, error)
-	GetCurrentPinHash(ctx context.Context, email string) (string, error)
 }
 
 type ProfileService struct {
@@ -34,41 +32,13 @@ func (s *ProfileService) GetProfile(ctx context.Context, email string) (model.Pr
 }
 
 // GetUserInfo returns profile fields and total balance — used for the app header.
-func (s *ProfileService) GetUserInfo(ctx context.Context, email string) (model.Profile, int64, error) {
+func (s *ProfileService) GetUserInfo(ctx context.Context, email string) (model.Profile, error) {
 	return s.repo.GetUserInfo(ctx, email)
 }
 
 func (s *ProfileService) EditProfile(ctx context.Context, email string, updates map[string]any) (model.Profile, error) {
 	return s.repo.EditProfile(ctx, email, updates)
 }
-
-
-func (s *ProfileService) EditPinWithAuth(ctx context.Context, email, oldPin, newPin string) (model.UserPin, error) {
-	currentPin, err := s.repo.GetCurrentPinHash(ctx, email)
-	if err != nil {
-		return model.UserPin{}, err
-	}
-
-	// First-time setup: pin_hash is NULL (scanned as empty string)
-	if currentPin != "" {
-		// Changing existing PIN → require old_pin verification
-		if oldPin == "" {
-			return model.UserPin{}, errOldPinRequired
-		}
-		var hc pkg.HashConfig
-		if err := hc.Compare(oldPin, currentPin); err != nil {
-			return model.UserPin{}, errInvalidOldPin
-		}
-	}
-
-	var hc pkg.HashConfig
-	hc.UseRecommended()
-	hashedPin := hc.GenHash(newPin)
-	return s.repo.EditPin(ctx, email, hashedPin)
-}
-
-var errOldPinRequired = errMsg("old pin is required")
-var errInvalidOldPin = errMsg("invalid old pin")
 
 func (s *ProfileService) EditPassword(ctx context.Context, email, oldPassword, newPassword string) (model.User, error) {
 	currentHash, err := s.repo.GetCurrentPassword(ctx, email)

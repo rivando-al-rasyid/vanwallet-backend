@@ -10,7 +10,7 @@ import (
 type TokenType string
 
 const (
-	TokenTypeRefresh           TokenType = "REFRESH"
+	TokenTypeAccess            TokenType = "ACCESS"
 	TokenTypePasswordReset     TokenType = "PASSWORD_RESET"
 	TokenTypeEmailVerification TokenType = "EMAIL_VERIFICATION"
 )

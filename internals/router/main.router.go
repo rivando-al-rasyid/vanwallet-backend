@@ -16,5 +16,4 @@ func MainRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) {
 	router.Static("/img", "public/img")
 	AuthRouter(router, db, rdb)
 	ProfileRouter(router, db)
-	TransactionRouter(router, db, rdb)
 }

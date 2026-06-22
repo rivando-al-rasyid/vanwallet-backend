@@ -33,7 +33,10 @@ func CORSMiddleware(ctx *gin.Context) {
 }
 
 func getAllowedOrigins() map[string]bool {
-	rawOrigins := os.Getenv("ALLOWED_ORIGIN")
+	rawOrigins := os.Getenv("ALLOWED_ORIGINS")
+	if strings.TrimSpace(rawOrigins) == "" {
+		rawOrigins = os.Getenv("ALLOWED_ORIGIN")
+	}
 
 	if strings.TrimSpace(rawOrigins) == "" {
 		rawOrigins = defaultAllowedOrigins
