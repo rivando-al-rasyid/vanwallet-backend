@@ -1,38 +1,51 @@
-services:
-  - type: web
-    name: vanwallet-backend
-    runtime: docker
-    plan: free
-    dockerfilePath: ./Dockerfile
-    envVars:
-      - key: PORT
-        value: 8080
+version: "1"
 
-      - key: DATABASE_URL
-        fromDatabase:
-          name: vanwallet-postgres
-          property: connectionString
+projects:
+  - name: My project
+    environments:
+      - name: Production
 
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: vanwallet-redis
-          property: connectionString
+        services:
+          - type: web
+            name: vanwallet-backend
+            runtime: docker
+            repo: https://github.com/rivando-al-rasyid/vanwallet-backend
+            plan: free
+            region: oregon
+            dockerContext: .
+            dockerfilePath: ./Dockerfile
+            autoDeployTrigger: commit
+            envVars:
+              - key: PORT
+                value: 8080
 
-      - key: JWT_SECRET
-        sync: false
+              - key: DATABASE_URL
+                fromDatabase:
+                  name: vanwallet-postgres
+                  property: connectionString
 
-      - key: APP_ENV
-        value: production
+              - key: REDIS_URL
+                fromService:
+                  type: redis
+                  name: vanwallet-redis
+                  property: connectionString
 
-  - type: redis
-    name: vanwallet-redis
-    plan: free
-    maxmemoryPolicy: allkeys-lru
-    ipAllowList: []
+              - key: APP_ENV
+                value: production
 
-databases:
-  - name: vanwallet-postgres
-    databaseName: vanwallet
-    user: vanwallet_user
-    plan: free
+              - key: JWT_SECRET
+                sync: false
+
+          - type: redis
+            name: vanwallet-redis
+            plan: free
+            region: oregon
+            maxmemoryPolicy: allkeys-lru
+            ipAllowList: []
+
+        databases:
+          - name: vanwallet-postgres
+            databaseName: vanwallet
+            user: vanwallet_user
+            plan: free
+            region: oregon
