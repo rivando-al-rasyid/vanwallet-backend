@@ -15,7 +15,7 @@ func TransactionRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) 
 	txServ := service.NewTransactionService(txRepo, rdb)
 	txCont := controller.NewTransactionController(txServ)
 
-	g := router.Group("/transaction", middleware.VerifyTokenWithDB(db))
+	g := router.Group("/transaction", middleware.AuthRequired(db))
 
 	// Read-only
 	g.GET("/receiver", txCont.FindReceivers)

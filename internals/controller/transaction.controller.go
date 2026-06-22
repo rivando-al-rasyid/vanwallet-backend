@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -18,14 +19,6 @@ type TransactionController struct {
 
 func NewTransactionController(transactionService *service.TransactionService) *TransactionController {
 	return &TransactionController{transactionService: transactionService}
-}
-
-func claimsEmail(ctx *gin.Context) (string, bool) {
-	c, exists := ctx.Get("claims")
-	if !exists {
-		return "", false
-	}
-	return c.(pkg.Claims).Email, true
 }
 
 func txToResponse(tx model.Transaction) dto.TransactionResponse {
@@ -52,11 +45,11 @@ func txToResponse(tx model.Transaction) dto.TransactionResponse {
 
 func (t *TransactionController) checkPIN(ctx *gin.Context, email, pin string) bool {
 	if pin == "" {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("PIN required", "pin field is required"))
+		ctx.JSON(http.StatusBadRequest, dto.NewError("PIN required", errors.New("pin field is required")))
 		return false
 	}
 	if err := t.transactionService.VerifyPIN(ctx.Request.Context(), email, pin); err != nil {
-		ctx.JSON(http.StatusUnauthorized, dto.NewError("Invalid PIN", err.Error()))
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Invalid PIN", err))
 		return false
 	}
 	return true
@@ -65,23 +58,14 @@ func (t *TransactionController) checkPIN(ctx *gin.Context, email, pin string) bo
 func (t *TransactionController) checkWalletOwnership(ctx *gin.Context, email string, walletID uuid.UUID) bool {
 	owned, err := t.transactionService.WalletBelongsToUser(ctx.Request.Context(), email, walletID)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, dto.NewError("Wallet validation failed", "Internal server error"))
+		ctx.JSON(http.StatusInternalServerError, dto.NewError("Wallet validation failed", errors.New("internal server error")))
 		return false
 	}
 	if !owned {
-		ctx.JSON(http.StatusForbidden, dto.NewError("Wallet access denied", "wallet_id does not belong to the authenticated user"))
+		ctx.JSON(http.StatusForbidden, dto.NewError("Wallet access denied", errors.New("wallet_id does not belong to the authenticated user")))
 		return false
 	}
 	return true
-}
-
-func historyDirection(txType string) string {
-	switch txType {
-	case "TOPUP", "TRANSFER_IN":
-		return "income"
-	default:
-		return "expense"
-	}
 }
 
 func historyTitle(h model.HistoryItem) string {
@@ -116,14 +100,14 @@ func historyTitle(h model.HistoryItem) string {
 // @Failure      500            {object}  dto.Response{error}
 // @Router       /transaction/summary [get]
 func (t *TransactionController) GetSummary(ctx *gin.Context) {
-	email, ok := claimsEmail(ctx)
+	email, ok := pkg.CurrentUserEmail(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", errors.New("missing user context")))
 		return
 	}
 	summary, err := t.transactionService.GetSummary(ctx.Request.Context(), email)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to fetch summary", err.Error()))
+		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to fetch summary", err))
 		return
 	}
 	wallets := make([]dto.WalletItem, 0, len(summary.Wallets))
@@ -148,24 +132,24 @@ func (t *TransactionController) GetSummary(ctx *gin.Context) {
 // @Failure      500            {object}  dto.Response{error}
 // @Router       /transaction/report [get]
 func (t *TransactionController) GetTransactionReport(ctx *gin.Context) {
-	email, ok := claimsEmail(ctx)
+	email, ok := pkg.CurrentUserEmail(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", errors.New("missing user context")))
 		return
 	}
 	rangeParam := ctx.DefaultQuery("range", "7days")
 	if rangeParam != "7days" && rangeParam != "30days" {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid range", "range must be '7days' or '30days'"))
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid range", errors.New("range must be '7days' or '30days'")))
 		return
 	}
 	typeFilter := ctx.DefaultQuery("type", "both")
 	if typeFilter != "income" && typeFilter != "expense" && typeFilter != "both" {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid type", "type must be 'income', 'expense', or 'both'"))
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid type", errors.New("type must be 'income', 'expense', or 'both'")))
 		return
 	}
 	points, err := t.transactionService.GetTransactionReport(ctx.Request.Context(), email, rangeParam, typeFilter)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to fetch report", err.Error()))
+		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to fetch report", err))
 		return
 	}
 	resp := make([]dto.ChartPointResponse, 0, len(points))
@@ -208,9 +192,9 @@ func (t *TransactionController) GetTransactionReport(ctx *gin.Context) {
 // @Failure      500            {object}  dto.Response{error}
 // @Router       /transaction/history [get]
 func (t *TransactionController) GetHistory(ctx *gin.Context) {
-	email, ok := claimsEmail(ctx)
+	email, ok := pkg.CurrentUserEmail(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", errors.New("missing user context")))
 		return
 	}
 
@@ -241,14 +225,14 @@ func (t *TransactionController) GetHistory(ctx *gin.Context) {
 
 	if filter.WalletID != "" {
 		if _, err := uuid.Parse(filter.WalletID); err != nil {
-			ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid wallet_id", "wallet_id must be a valid UUID"))
+			ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid wallet_id", errors.New("wallet_id must be a valid UUID")))
 			return
 		}
 	}
 
 	items, total, err := t.transactionService.GetAllHistory(ctx.Request.Context(), email, filter)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to fetch history", err.Error()))
+		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to fetch history", err))
 		return
 	}
 
@@ -299,19 +283,19 @@ func (t *TransactionController) GetHistory(ctx *gin.Context) {
 // @Failure      500            {object}  dto.Response{error}
 // @Router       /transaction/topup [post]
 func (t *TransactionController) CreateTopup(ctx *gin.Context) {
-	email, ok := claimsEmail(ctx)
+	email, ok := pkg.CurrentUserEmail(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", errors.New("missing user context")))
 		return
 	}
 	var body dto.TopupRequest
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err.Error()))
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err))
 		return
 	}
 	walletID, err := uuid.Parse(body.WalletID)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid wallet_id", "wallet_id must be a valid UUID"))
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid wallet_id", errors.New("wallet_id must be a valid UUID")))
 		return
 	}
 	if !t.checkWalletOwnership(ctx, email, walletID) {
@@ -324,7 +308,7 @@ func (t *TransactionController) CreateTopup(ctx *gin.Context) {
 		PaymentMethod: &pm,
 	})
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to create top-up", err.Error()))
+		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to create top-up", err))
 		return
 	}
 	extRef := ""
@@ -357,19 +341,19 @@ func (t *TransactionController) CreateTopup(ctx *gin.Context) {
 // @Failure      404            {object}  dto.Response{error}
 // @Router       /transaction/topup/{id}/confirm [patch]
 func (t *TransactionController) ConfirmTopup(ctx *gin.Context) {
-	email, ok := claimsEmail(ctx)
+	email, ok := pkg.CurrentUserEmail(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", errors.New("missing user context")))
 		return
 	}
 	topupID, err := uuid.Parse(ctx.Param("id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid topup id", "id must be a valid UUID"))
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid topup id", errors.New("id must be a valid UUID")))
 		return
 	}
 	topup, err := t.transactionService.ConfirmTopup(ctx.Request.Context(), email, topupID)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, dto.NewError("Failed to confirm top-up", err.Error()))
+		ctx.JSON(http.StatusNotFound, dto.NewError("Failed to confirm top-up", err))
 		return
 	}
 	pmStr := ""
@@ -398,14 +382,14 @@ func (t *TransactionController) ConfirmTopup(ctx *gin.Context) {
 // @Failure      500            {object}  dto.Response{error}
 // @Router       /transaction/withdrawal [post]
 func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
-	email, ok := claimsEmail(ctx)
+	email, ok := pkg.CurrentUserEmail(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", errors.New("missing user context")))
 		return
 	}
 	var body dto.WithdrawalRequest
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err.Error()))
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err))
 		return
 	}
 	if !t.checkPIN(ctx, email, body.Pin) {
@@ -413,7 +397,7 @@ func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 	}
 	walletID, err := uuid.Parse(body.WalletID)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid wallet_id", "wallet_id must be a valid UUID"))
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid wallet_id", errors.New("wallet_id must be a valid UUID")))
 		return
 	}
 	if !t.checkWalletOwnership(ctx, email, walletID) {
@@ -427,7 +411,7 @@ func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 		if err.Error() == "insufficient balance" {
 			status = http.StatusUnprocessableEntity
 		}
-		ctx.JSON(status, dto.NewError("Withdrawal failed", err.Error()))
+		ctx.JSON(status, dto.NewError("Withdrawal failed", err))
 		return
 	}
 	ctx.JSON(http.StatusCreated, dto.NewSuccess("Withdrawal submitted successfully", dto.WithdrawalResponse{
@@ -453,14 +437,14 @@ func (t *TransactionController) CreateWithdrawal(ctx *gin.Context) {
 // @Failure      500            {object}  dto.Response{error}
 // @Router       /transaction/transfer [post]
 func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
-	email, ok := claimsEmail(ctx)
+	email, ok := pkg.CurrentUserEmail(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", errors.New("missing user context")))
 		return
 	}
 	var body dto.TransferRequest
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err.Error()))
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err))
 		return
 	}
 	if !t.checkPIN(ctx, email, body.Pin) {
@@ -468,7 +452,7 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 	}
 	senderWalletID, err := uuid.Parse(body.SenderWalletID)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid sender_wallet_id", "must be a valid UUID"))
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid sender_wallet_id", errors.New("must be a valid UUID")))
 		return
 	}
 	if !t.checkWalletOwnership(ctx, email, senderWalletID) {
@@ -476,7 +460,7 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 	}
 	recipientWalletID, err := uuid.Parse(body.RecipientWalletID)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid recipient_wallet_id", "must be a valid UUID"))
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid recipient_wallet_id", errors.New("must be a valid UUID")))
 		return
 	}
 	var note *string
@@ -492,7 +476,7 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 		if err.Error() == "insufficient balance" {
 			status = http.StatusUnprocessableEntity
 		}
-		ctx.JSON(status, dto.NewError("Transfer failed", err.Error()))
+		ctx.JSON(status, dto.NewError("Transfer failed", err))
 		return
 	}
 	transferCode := ""
@@ -524,14 +508,14 @@ func (t *TransactionController) CreateTransfer(ctx *gin.Context) {
 // @Failure      500            {object}  dto.Response{error}
 // @Router       /transaction/expense [post]
 func (t *TransactionController) CreateExpense(ctx *gin.Context) {
-	email, ok := claimsEmail(ctx)
+	email, ok := pkg.CurrentUserEmail(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", errors.New("missing user context")))
 		return
 	}
 	var body dto.ExpenseRequest
 	if err := ctx.ShouldBindJSON(&body); err != nil {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err.Error()))
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err))
 		return
 	}
 	if !t.checkPIN(ctx, email, body.Pin) {
@@ -539,7 +523,7 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 	}
 	walletID, err := uuid.Parse(body.WalletID)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid wallet_id", "wallet_id must be a valid UUID"))
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid wallet_id", errors.New("wallet_id must be a valid UUID")))
 		return
 	}
 	if !t.checkWalletOwnership(ctx, email, walletID) {
@@ -558,7 +542,7 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 		if err.Error() == "insufficient balance" {
 			status = http.StatusUnprocessableEntity
 		}
-		ctx.JSON(status, dto.NewError("Expense recording failed", err.Error()))
+		ctx.JSON(status, dto.NewError("Expense recording failed", err))
 		return
 	}
 	cat, merch := "", ""
@@ -591,9 +575,9 @@ func (t *TransactionController) CreateExpense(ctx *gin.Context) {
 // @Failure      500    {object}  dto.Response{error}
 // @Router       /transaction/receiver [get]
 func (t *TransactionController) FindReceivers(ctx *gin.Context) {
-	email, ok := claimsEmail(ctx)
+	email, ok := pkg.CurrentUserEmail(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", "Missing claims"))
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", errors.New("missing user context")))
 		return
 	}
 
@@ -622,7 +606,7 @@ func (t *TransactionController) FindReceivers(ctx *gin.Context) {
 	)
 
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, dto.NewError("Search failed", err.Error()))
+		ctx.JSON(http.StatusInternalServerError, dto.NewError("Search failed", err))
 		return
 	}
 
@@ -664,6 +648,5 @@ func (t *TransactionController) FindReceivers(ctx *gin.Context) {
 			Page:       page,
 			Limit:      limit,
 			TotalPages: totalPages,
-		},
-	))
+		}))
 }

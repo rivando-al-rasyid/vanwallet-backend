@@ -11,8 +11,8 @@ import (
 //   - RecipientTransactionID → the TRANSFER_IN  transaction row (recipient's ledger entry)
 //   - TransferCode           → optional human-readable reference code
 type Transfer struct {
-	TransactionID          uuid.UUID  `db:"transaction_id"`
-	RecipientTransactionID uuid.UUID  `db:"recipient_transaction_id"`
-	TransferCode           *string    `db:"transfer_code"`
-	CreatedAt              time.Time  `db:"created_at"`
+	TransactionID          uuid.UUID `db:"transaction_id"`
+	RecipientTransactionID uuid.UUID `db:"recipient_transaction_id"`
+	TransferCode           *string   `db:"transfer_code"`
+	CreatedAt              time.Time `db:"created_at"`
 }
