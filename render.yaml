@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: vanwallet-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 8080
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vanwallet-postgres
+          property: connectionString
+
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: vanwallet-redis
+          property: connectionString
+
+      - key: JWT_SECRET
+        sync: false
+
+      - key: APP_ENV
+        value: production
+
+  - type: redis
+    name: vanwallet-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+
+databases:
+  - name: vanwallet-postgres
+    databaseName: vanwallet
+    user: vanwallet_user
+    plan: free
