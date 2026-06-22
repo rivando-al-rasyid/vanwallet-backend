@@ -1,23 +1,25 @@
 version: "1"
 
 projects:
-  - name: My project
+  - name: vanwallet
     environments:
       - name: Production
-
         services:
           - type: web
             name: vanwallet-backend
             runtime: docker
             repo: https://github.com/rivando-al-rasyid/vanwallet-backend
             plan: free
-            region: oregon
+            region: singapore
             dockerContext: .
             dockerfilePath: ./Dockerfile
             autoDeployTrigger: commit
             envVars:
               - key: PORT
                 value: 8080
+
+              - key: APP_ENV
+                value: production
 
               - key: DATABASE_URL
                 fromDatabase:
@@ -30,16 +32,13 @@ projects:
                   name: vanwallet-redis
                   property: connectionString
 
-              - key: APP_ENV
-                value: production
-
               - key: JWT_SECRET
                 sync: false
 
           - type: redis
             name: vanwallet-redis
             plan: free
-            region: oregon
+            region: singapore
             maxmemoryPolicy: allkeys-lru
             ipAllowList: []
 
@@ -48,4 +47,4 @@ projects:
             databaseName: vanwallet
             user: vanwallet_user
             plan: free
-            region: oregon
+            region: singapore
