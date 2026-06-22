@@ -44,7 +44,7 @@ projects:
           - type: web
             name: vanwallet-frontend
             runtime: docker
-            repo: https://github.com/rivando-al-rasyid/vanwallet-frontend
+            repo: https://github.com/rivando-al-rasyid/vanwallet-react
             plan: free
             region: singapore
             dockerContext: .
