@@ -21,7 +21,7 @@ func NewAuthRepo(db *pgxpool.Pool) *Authrepo {
 	return &Authrepo{db: db}
 }
 
-// Register creates a user, profile,  and wallet atomically in one transaction.
+// Register creates a user, profile, and default wallet atomically in one transaction.
 func (a *Authrepo) Register(ctx context.Context, email, hashpwd string) (model.User, error) {
 	tx, err := a.db.Begin(ctx)
 	if err != nil {
@@ -34,9 +34,9 @@ func (a *Authrepo) Register(ctx context.Context, email, hashpwd string) (model.U
 
 	err = tx.QueryRow(ctx,
 		`INSERT INTO users (email, password) VALUES ($1, $2)
-		 RETURNING id, email, created_at`,
+		 RETURNING id, email, created_at, updated_at`,
 		email, hashpwd,
-	).Scan(&user.ID, &user.Email, &user.CreatedAt)
+	).Scan(&user.ID, &user.Email, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		return model.User{}, fmt.Errorf("Register insert user: %w", err)
 	}
@@ -51,6 +51,14 @@ func (a *Authrepo) Register(ctx context.Context, email, hashpwd string) (model.U
 		return model.User{}, fmt.Errorf("Register insert profile: %w", err)
 	}
 
+	if _, err = tx.Exec(ctx,
+		`INSERT INTO wallets (user_id, label, balance) VALUES ($1, $2, 0)`,
+		user.ID,
+		"Main Wallet",
+	); err != nil {
+		return model.User{}, fmt.Errorf("Register insert default wallet: %w", err)
+	}
+
 	if err = tx.Commit(ctx); err != nil {
 		return model.User{}, fmt.Errorf("Register commit: %w", err)
 	}
@@ -61,9 +69,12 @@ func (a *Authrepo) Register(ctx context.Context, email, hashpwd string) (model.U
 func (a *Authrepo) Login(ctx context.Context, email string) (model.User, error) {
 	var user model.User
 	err := a.db.QueryRow(ctx,
-		`SELECT id, password FROM users WHERE email = $1`, email,
-	).Scan(&user.ID, &user.Password)
+		`SELECT id, email, password, created_at, updated_at FROM users WHERE email = $1`, email,
+	).Scan(&user.ID, &user.Email, &user.Password, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.User{}, errors.New("user not found")
+		}
 		return model.User{}, err
 	}
 	return user, nil
