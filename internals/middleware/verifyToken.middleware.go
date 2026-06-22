@@ -16,10 +16,7 @@ import (
 func extractAndVerifyToken(ctx *gin.Context, logTag string, allowCookie bool) (string, pkg.Claims, error) {
 	rawToken, err := pkg.ExtractRequestToken(ctx, allowCookie)
 	if err != nil {
-		ctx.AbortWithStatusJSON(
-			http.StatusUnauthorized,
-			dto.NewError("Unauthorized", err),
-		)
+		ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewError("Unauthorized", err))
 
 		return "", pkg.Claims{}, err
 	}
@@ -30,22 +27,13 @@ func extractAndVerifyToken(ctx *gin.Context, logTag string, allowCookie bool) (s
 
 		switch {
 		case errors.Is(err, jwt.ErrTokenExpired):
-			ctx.AbortWithStatusJSON(
-				http.StatusUnauthorized,
-				dto.NewError("Token expired", err),
-			)
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewError("Token expired", err))
 
 		case errors.Is(err, jwt.ErrTokenInvalidIssuer):
-			ctx.AbortWithStatusJSON(
-				http.StatusUnauthorized,
-				dto.NewError("Invalid token issuer", err),
-			)
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewError("Invalid token issuer", err))
 
 		default:
-			ctx.AbortWithStatusJSON(
-				http.StatusUnauthorized,
-				dto.NewError("Invalid token", errors.New("invalid token")),
-			)
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewError("Invalid token", errors.New("invalid token")))
 		}
 
 		return "", pkg.Claims{}, err
@@ -67,13 +55,9 @@ func AuthRequired(db *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		if claims.Subject != pkg.AccessTokenSubject {
-			ctx.AbortWithStatusJSON(
-				http.StatusForbidden,
-				dto.NewError(
-					"Forbidden",
-					errors.New("this token cannot be used for normal access"),
-				),
-			)
+			ctx.AbortWithStatusJSON(http.StatusForbidden, dto.NewError(
+				"Forbidden",
+				errors.New("this token cannot be used for normal access")))
 
 			return
 		}
@@ -82,22 +66,15 @@ func AuthRequired(db *pgxpool.Pool) gin.HandlerFunc {
 		if err != nil {
 			log.Println("[AuthRequired] DB token check error:", err)
 
-			ctx.AbortWithStatusJSON(
-				http.StatusInternalServerError,
-				dto.NewError("Error", errors.New("internal server error")),
-			)
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, dto.NewError("Error", errors.New("internal server error")))
 
 			return
 		}
 
 		if !valid {
-			ctx.AbortWithStatusJSON(
-				http.StatusUnauthorized,
-				dto.NewError(
-					"Token has been revoked or expired, please login again",
-					errors.New("token invalid"),
-				),
-			)
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewError(
+				"Token has been revoked or expired, please login again",
+				errors.New("token invalid")))
 
 			return
 		}
@@ -119,13 +96,9 @@ func PasswordResetRequired() gin.HandlerFunc {
 		}
 
 		if claims.Subject != pkg.ResetTokenSubject {
-			ctx.AbortWithStatusJSON(
-				http.StatusForbidden,
-				dto.NewError(
-					"Forbidden",
-					errors.New("this token cannot be used for password reset"),
-				),
-			)
+			ctx.AbortWithStatusJSON(http.StatusForbidden, dto.NewError(
+				"Forbidden",
+				errors.New("this token cannot be used for password reset")))
 
 			return
 		}

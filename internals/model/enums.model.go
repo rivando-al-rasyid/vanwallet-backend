@@ -25,8 +25,8 @@ const (
 type TransactionType string
 
 const (
-	TransactionTypeExpense      TransactionType = "EXPENSE"
-	TransactionTypeWithdrawal   TransactionType = "WITHDRAWAL"
-	TransactionTypeTransferIn   TransactionType = "TRANSFER_IN"
-	TransactionTypeTransferOut  TransactionType = "TRANSFER_OUT"
+	TransactionTypeExpense     TransactionType = "EXPENSE"
+	TransactionTypeWithdrawal  TransactionType = "WITHDRAWAL"
+	TransactionTypeTransferIn  TransactionType = "TRANSFER_IN"
+	TransactionTypeTransferOut TransactionType = "TRANSFER_OUT"
 )
