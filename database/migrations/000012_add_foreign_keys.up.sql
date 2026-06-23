@@ -4,21 +4,15 @@ COMMENT ON TABLE "profiles" IS 'One-to-one with users. Stores PII separately for
 
 COMMENT ON TABLE "favorites" IS 'Links the owner (user_id) to their saved contact (target_user_id) for quick transfers.';
 
-COMMENT ON TABLE "user_pins" IS 'PIN stored as bcrypt hash. locked_until enables brute-force protection.';
+COMMENT ON TABLE "user_pins" IS 'PIN stored as Argon2id hash. failed_attempts and locked_until enable brute-force protection.';
 
 COMMENT ON TABLE "wallets" IS 'Supports multiple wallets per user. Balance stored in smallest currency unit (sen/IDR).';
 
 COMMENT ON TABLE "topups" IS 'Standalone top‑up table. Separate category — not recorded in the central transactions ledger.';
 
 COMMENT ON TABLE "transactions" IS 'Central ledger for EXPENSE, WITHDRAWAL, TRANSFER_IN/OUT.
-Amount is signed (+ for IN, - for OUT). Top‑ups are handled separately.
-
-PostgreSQL CHECK constraint example:
-ALTER TABLE transactions ADD CONSTRAINT chk_amount_sign CHECK (
-  (type = ''TRANSFER_IN'' AND amount > 0) OR
-  (type IN (''EXPENSE'',''WITHDRAWAL'',''TRANSFER_OUT'') AND amount < 0)
-);
-';
+Amount is always positive; transaction direction is inferred from type.
+Top-ups are handled separately.';
 
 COMMENT ON TABLE "transfers" IS 'Links BOTH sides of a transfer. transaction_id = OUT row (sender). recipient_transaction_id = IN row (recipient).';
 

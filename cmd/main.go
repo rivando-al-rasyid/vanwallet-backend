@@ -35,10 +35,11 @@ func main() {
 
 	rc, err := config.ConnectRedis()
 	if err != nil {
-		log.Fatalf("Redis connection error. \ncause: %s", err.Error())
+		log.Printf("Redis disabled: %s", err.Error())
+	} else {
+		defer rc.Close()
+		log.Println("Redis Connected")
 	}
-	defer rc.Close()
-	log.Println("Redis Connected")
 
 	router.MainRouter(app, db, rc)
 

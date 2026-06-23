@@ -13,7 +13,7 @@ WITH expense_rows AS (
     SELECT
         gen_random_uuid() AS transaction_id,
         w.id AS wallet_id,
-        -(10000 +((day_offset + user_index) % 10) * 7500)::numeric AS amount,
+        (10000 +((day_offset + user_index) % 10) * 7500)::numeric AS amount,
         0::numeric AS admin_fee,
         'SUCCESS' AS status,
         CASE ((day_offset + user_index) % 8)
@@ -122,7 +122,7 @@ WITH withdrawal_rows AS (
     SELECT
         gen_random_uuid() AS transaction_id,
         w.id AS wallet_id,
-        -(50000 +((day_offset + user_index) % 5) * 25000)::numeric AS amount,
+        (50000 +((day_offset + user_index) % 5) * 25000)::numeric AS amount,
         2500::numeric AS admin_fee,
         'SUCCESS' AS status,
         CASE ((day_offset + user_index) % 4)
@@ -260,7 +260,7 @@ INSERT INTO transactions(id, wallet_id, type, amount, admin_fee, status, note, c
         outgoing_transaction_id,
         sender_wallet_id,
         'TRANSFER_OUT',
-        - transfer_amount,
+        transfer_amount,
         0,
         'SUCCESS',
         'Transfer ke ' || receiver_name,
@@ -357,7 +357,7 @@ WITH expense_rows AS (
     SELECT
         gen_random_uuid() AS transaction_id,
         w.id AS wallet_id,
-        -(10000 +((expense_number + user_index) % 10) * 7500)::numeric AS amount,
+        (10000 +((expense_number + user_index) % 10) * 7500)::numeric AS amount,
         0::numeric AS admin_fee,
         'SUCCESS' AS status,
         CASE ((expense_number + user_index) % 8)
@@ -465,7 +465,7 @@ WITH withdrawal_rows AS (
     SELECT
         gen_random_uuid() AS transaction_id,
         w.id AS wallet_id,
-        -(50000 +((withdrawal_number + user_index) % 5) * 25000)::numeric AS amount,
+        (50000 +((withdrawal_number + user_index) % 5) * 25000)::numeric AS amount,
         2500::numeric AS admin_fee,
         'SUCCESS' AS status,
         CASE ((withdrawal_number + user_index) % 4)
@@ -603,7 +603,7 @@ INSERT INTO transactions(id, wallet_id, type, amount, admin_fee, status, note, c
         outgoing_transaction_id,
         sender_wallet_id,
         'TRANSFER_OUT',
-        - transfer_amount,
+        transfer_amount,
         0,
         'SUCCESS',
         'Transfer ke ' || receiver_name,

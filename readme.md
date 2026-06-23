@@ -42,6 +42,16 @@ If you use Docker, make sure the backend `Dockerfile` uses a matching Go image:
 FROM golang:1.26.3-alpine AS builder
 ```
 
+
+## Security Notes Added
+
+* Manual top-up confirmation was removed. Top-ups stay `PENDING` until your payment webhook implementation marks them successful.
+* Tokens are stored as SHA-256 digests in the database instead of raw JWT/opaque token strings.
+* User PIN verification now tracks failed attempts and temporarily locks the PIN after repeated failures.
+* Transaction amounts are stored as positive values; direction is inferred from transaction type.
+* `/healthz` and `/readyz` are available for deployment health checks.
+* Transaction features are split internally: `topup`, `transfer`, `withdrawal`, `expense`, and `receiver` each have their own controller/service/repository/router file. Public URLs remain under `/transaction/...`.
+
 ## Project Structure
 
 ```txt
@@ -97,8 +107,7 @@ DB_NAME=vanwallet_db
 DB_HOST=postgres
 DB_PORT=5432
 
-RDB_HOST=redis
-RDB_PORT=6379
+RDB_ADDR=redis:6379
 RDB_USER=
 RDB_PASS=
 
@@ -112,8 +121,7 @@ For local development without Docker:
 DB_HOST=localhost
 DB_PORT=5432
 
-RDB_HOST=localhost
-RDB_PORT=6379
+RDB_ADDR=localhost:6379
 ```
 
 ## Run with Docker
@@ -261,16 +269,14 @@ POST /auth/login
 POST /auth/reset
 POST /auth/reset/confirm
 POST /auth/change-password
+GET  /auth/me
 POST /auth/logout
-GET  /auth/pin
-POST /auth/pin/verify
 ```
 
 ## Profile Routes
 
 ```txt
 GET   /profile
-GET   /profile/info
 PATCH /profile/edit
 PATCH /profile/change/pin
 PATCH /profile/change/password
@@ -285,7 +291,6 @@ GET   /transaction/history
 GET   /transaction/receiver
 
 POST  /transaction/topup
-PATCH /transaction/topup/:id/confirm
 POST  /transaction/transfer
 POST  /transaction/withdrawal
 POST  /transaction/expense
@@ -454,11 +459,7 @@ GET /transaction/receiver?page=1&limit=10&query=andi
 POST /transaction/topup
 ```
 
-Confirm top-up:
-
-```txt
-PATCH /transaction/topup/:id/confirm
-```
+Top-up creation returns a `PENDING` record. Balance crediting should be handled later by your payment webhook, not by a user-accessible confirm endpoint.
 
 ### Transfer
 
@@ -629,8 +630,7 @@ DB_HOST=localhost
 Check:
 
 ```env
-RDB_HOST
-RDB_PORT
+RDB_ADDR
 RDB_USER
 RDB_PASS
 ```
@@ -638,13 +638,13 @@ RDB_PASS
 If using Docker:
 
 ```env
-RDB_HOST=redis
+RDB_ADDR=redis:6379
 ```
 
 If running locally:
 
 ```env
-RDB_HOST=localhost
+RDB_ADDR=localhost:6379
 ```
 
 ### Migration dirty error
