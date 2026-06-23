@@ -3,3 +3,4 @@ tmp
 .vercel
 .env*
 docker-compose.yml
+docs
