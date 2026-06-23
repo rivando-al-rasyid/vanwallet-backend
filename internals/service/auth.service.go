@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,6 +20,7 @@ import (
 type AuthRepo interface {
 	Register(ctx context.Context, email, password string) (model.User, error)
 	Login(ctx context.Context, email string) (model.User, error)
+	GetUserInfo(ctx context.Context, email string) (model.Profile, error)
 	GetUserByResetToken(ctx context.Context, rawToken string) (model.User, error)
 	SaveToken(ctx context.Context, userID uuid.UUID, rawToken string, tokenType model.TokenType, expiresAt time.Time) error
 	RevokeToken(ctx context.Context, rawToken string) error
@@ -40,19 +42,34 @@ func NewAuthService(authRepo AuthRepo, rdb *redis.Client) *AuthService {
 	return &AuthService{authRepo: authRepo, rdb: rdb}
 }
 
+func normalizeAuthEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
+func authUserCacheKey(email string) string {
+	return "vando:user:" + normalizeAuthEmail(email)
+}
+
 func (a *AuthService) Register(ctx context.Context, user dto.RegisterRequest) (dto.UserResponse, error) {
+	email := normalizeAuthEmail(user.Email)
+
 	var hc pkg.HashConfig
 	hc.UseRecommended()
 	hashedPwd := hc.GenHash(user.Password)
-	result, err := a.authRepo.Register(ctx, user.Email, hashedPwd)
+	result, err := a.authRepo.Register(ctx, email, hashedPwd)
 	if err != nil {
 		return dto.UserResponse{}, err
 	}
 	return dto.UserResponse{ID: result.ID, Email: result.Email}, nil
 }
 
+func (a *AuthService) GetMe(ctx context.Context, email string) (model.Profile, error) {
+	return a.authRepo.GetUserInfo(ctx, normalizeAuthEmail(email))
+}
+
 func (a *AuthService) Login(ctx context.Context, user dto.LoginRequest) (AuthSession, error) {
-	login, err := a.getOrFetchUser(ctx, user.Email)
+	email := normalizeAuthEmail(user.Email)
+	login, err := a.getOrFetchUser(ctx, email)
 	if err != nil {
 		return AuthSession{}, err
 	}
@@ -62,7 +79,7 @@ func (a *AuthService) Login(ctx context.Context, user dto.LoginRequest) (AuthSes
 		return AuthSession{}, err
 	}
 
-	claims := pkg.NewClaims(login.ID, user.Email)
+	claims := pkg.NewClaims(login.ID, login.Email)
 	token, err := claims.GenJWT()
 	if err != nil {
 		return AuthSession{}, err
@@ -82,13 +99,14 @@ func (a *AuthService) Login(ctx context.Context, user dto.LoginRequest) (AuthSes
 		Token: token,
 		User: dto.UserResponse{
 			ID:    login.ID,
-			Email: user.Email,
+			Email: login.Email,
 		},
 	}, nil
 }
 
 func (a *AuthService) ResetPassword(ctx context.Context, user dto.ResetPasswordRequest) (string, error) {
-	login, err := a.getOrFetchUser(ctx, user.Email)
+	email := normalizeAuthEmail(user.Email)
+	login, err := a.getOrFetchUser(ctx, email)
 	if err != nil {
 		return "", err
 	}
@@ -117,7 +135,7 @@ func (a *AuthService) ConfirmResetPassword(ctx context.Context, user dto.Confirm
 		return "", err
 	}
 
-	// Issue a short-lived JWT scoped exclusively for the change-password endpoint
+	// Issue a short-lived JWT scoped exclusively for the change-password endpoint.
 	claims := pkg.NewResetClaims(foundUser.ID, foundUser.Email)
 	resetJWT, err := claims.GenJWT()
 	if err != nil {
@@ -128,18 +146,25 @@ func (a *AuthService) ConfirmResetPassword(ctx context.Context, user dto.Confirm
 }
 
 // ChangeResetPassword hashes newPassword and persists it for the user identified by
-// the password-reset JWT claims. The JWT was already validated (and the opaque
-// reset token already revoked) in ConfirmResetPassword, so no extra token check
-// is needed here.
-func (a *AuthService) ChangeResetPassword(ctx context.Context, userID uuid.UUID, newPassword string) error {
+// the password-reset JWT claims.
+func (a *AuthService) ChangeResetPassword(ctx context.Context, userID uuid.UUID, email, newPassword string) error {
 	var hc pkg.HashConfig
 	hc.UseRecommended()
 	hashed := hc.GenHash(newPassword)
-	return a.authRepo.UpdatePassword(ctx, userID, hashed)
+	if err := a.authRepo.UpdatePassword(ctx, userID, hashed); err != nil {
+		return err
+	}
+
+	if err := cache.DelFromCache(ctx, a.rdb, authUserCacheKey(email)); err != nil {
+		log.Println("cache evict error after reset password change:", err)
+	}
+
+	return nil
 }
 
 func (a *AuthService) getOrFetchUser(ctx context.Context, email string) (*model.User, error) {
-	rkey := "vando:user:" + email
+	email = normalizeAuthEmail(email)
+	rkey := authUserCacheKey(email)
 
 	var user model.User
 	if err := cache.GetFromCache(ctx, a.rdb, rkey, &user); err == nil {
@@ -166,8 +191,7 @@ func (a *AuthService) Logout(ctx context.Context, rawToken, email string) error 
 	if err := a.authRepo.RevokeToken(ctx, rawToken); err != nil {
 		return err
 	}
-	rkey := "vando:user:" + email
-	if err := cache.DelFromCache(ctx, a.rdb, rkey); err != nil {
+	if err := cache.DelFromCache(ctx, a.rdb, authUserCacheKey(email)); err != nil {
 		log.Println("cache evict error on logout:", err) // non-fatal
 	}
 	return nil

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -87,13 +88,14 @@ func (a *AuthController) Login(ctx *gin.Context) {
 
 // Me godoc
 // @Summary      Get current authenticated user
-// @Description  Returns the active user identity from the verified access cookie or Bearer token.
+// @Description  Returns the active user's identity, profile summary, wallet balance, and PIN status from the verified access cookie or Bearer token.
 // @Tags         Authentication
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Success      200  {object}  dto.Response{data=dto.UserResponse}  "Authenticated user retrieved"
-// @Failure      401  {object}  dto.Response                         "Unauthorized"
+// @Success      200  {object}  dto.Response{data=dto.UserInfoResponse}  "Authenticated user retrieved"
+// @Failure      401  {object}  dto.Response                             "Unauthorized"
+// @Failure      500  {object}  dto.Response                             "Internal server error"
 // @Router       /auth/me [get]
 func (a *AuthController) Me(ctx *gin.Context) {
 	userID, ok := pkg.CurrentUserID(ctx)
@@ -108,9 +110,20 @@ func (a *AuthController) Me(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, dto.NewSuccess("Authenticated user retrieved", dto.UserResponse{
-		ID:    userID,
-		Email: email,
+	profile, err := a.authservice.GetMe(ctx.Request.Context(), email)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to fetch authenticated user", errors.New("internal server error")))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, dto.NewSuccess("Authenticated user retrieved", dto.UserInfoResponse{
+		ID:             userID.String(),
+		Email:          email,
+		FullName:       profile.FullName,
+		Phone:          profile.Phone,
+		Photo:          profile.Photo,
+		CurrentBalance: profile.CurrentBalance,
+		PinHash:        profile.PinHash,
 	}))
 }
 
@@ -242,7 +255,13 @@ func (a *AuthController) ChangePassword(ctx *gin.Context) {
 		return
 	}
 
-	if err := a.authservice.ChangeResetPassword(ctx.Request.Context(), userID, body.NewPassword); err != nil {
+	email, ok := pkg.CurrentUserEmail(ctx)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", errors.New("missing user context")))
+		return
+	}
+
+	if err := a.authservice.ChangeResetPassword(ctx.Request.Context(), userID, email, body.NewPassword); err != nil {
 		log.Printf("[AuthController.ChangePassword] service error: %v\n", err)
 		ctx.JSON(http.StatusInternalServerError, dto.NewError("Change password failed", err))
 		return

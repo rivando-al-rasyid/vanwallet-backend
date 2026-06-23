@@ -202,7 +202,7 @@ func (p *ProfileController) EditPin(ctx *gin.Context) {
 // @Failure      400   {object}  dto.Response               "Invalid request body"
 // @Failure      401   {object}  dto.Response               "Unauthorized or old password is incorrect"
 // @Failure      500   {object}  dto.Response               "Internal server error"
-// @Router       /profile/password [patch]
+// @Router       /profile/change/password [patch]
 func (p *ProfileController) EditPassword(ctx *gin.Context) {
 	email, ok := pkg.CurrentUserEmail(ctx)
 	if !ok {
@@ -227,44 +227,4 @@ func (p *ProfileController) EditPassword(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, dto.NewSuccessNoData("Password successfully updated"))
-}
-
-// GetUserInfo godoc
-// @Summary      Get user info
-// @Description  Returns the authenticated user's account identity and profile summary.
-// @Tags         Profile
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Success      200  {object}  dto.Response{data=dto.UserInfoResponse}  "User info successfully retrieved"
-// @Failure      401  {object}  dto.Response                             "Unauthorized"
-// @Failure      500  {object}  dto.Response                             "Internal server error"
-// @Router       /profile/info [get]
-func (p *ProfileController) GetUserInfo(ctx *gin.Context) {
-	email, ok := pkg.CurrentUserEmail(ctx)
-	if !ok {
-		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", errors.New("missing user context")))
-		return
-	}
-	userID, ok := pkg.CurrentUserID(ctx)
-	if !ok {
-		ctx.JSON(http.StatusUnauthorized, dto.NewError("Unauthorized", errors.New("missing user context")))
-		return
-	}
-
-	profile, err := p.profileservice.GetUserInfo(ctx.Request.Context(), email)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to fetch user info", errors.New("internal server error")))
-		return
-	}
-
-	ctx.JSON(http.StatusOK, dto.NewSuccess("User info successfully retrieved", dto.UserInfoResponse{
-		ID:             userID.String(),
-		Email:          email,
-		FullName:       profile.FullName,
-		Phone:          profile.Phone,
-		Photo:          profile.Photo,
-		CurrentBalance: profile.CurrentBalance,
-		PinHash:        profile.PinHash,
-	}))
 }

@@ -97,7 +97,7 @@ func (p *ProfileRepo) EditProfile(ctx context.Context, email string, updates map
 	return profile, nil
 }
 
-// GetCurrentPassword returns the bcrypt hash of the user's current password.
+// GetCurrentPassword returns the Argon2id hash of the user's current password.
 func (p *ProfileRepo) GetCurrentPassword(ctx context.Context, email string) (string, error) {
 	var hash string
 	err := p.db.QueryRow(ctx, `SELECT password FROM users WHERE email = $1`, email).Scan(&hash)
@@ -176,41 +176,4 @@ func (p *ProfileRepo) EditPin(ctx context.Context, email string, hashedPin strin
 		return model.UserPin{}, fmt.Errorf("EditPin: %w", err)
 	}
 	return userPin, nil
-}
-
-// GetUserInfo returns profile + total wallet balance in a single query.
-// Used for the app header (avatar, name, balance).
-func (p *ProfileRepo) GetUserInfo(ctx context.Context, email string) (model.Profile, error) {
-	var profile model.Profile
-
-	err := p.db.QueryRow(ctx, `
-		SELECT
-			p.full_name,
-			p.phone,
-			p.photo,
-			COALESCE(SUM(w.balance), 0) AS current_balance,
-			CASE
-				WHEN COALESCE(up.pin_hash, '') = '' THEN NULL
-				ELSE 'set'
-			END AS pin_hash
-		FROM users u
-		JOIN profiles p ON p.user_id = u.id
-		LEFT JOIN wallets w ON w.user_id = u.id
-		LEFT JOIN user_pins up ON up.user_id = u.id
-		WHERE u.email = $1
-		GROUP BY p.full_name, p.phone, p.photo, up.pin_hash
-		LIMIT 1`, email,
-	).Scan(
-		&profile.FullName,
-		&profile.Phone,
-		&profile.Photo,
-		&profile.CurrentBalance,
-		&profile.PinHash,
-	)
-
-	if err != nil {
-		return model.Profile{}, err
-	}
-
-	return profile, nil
 }

@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"log"
 	"mime/multipart"
 	"path"
 	"strings"
 
+	"github.com/redis/go-redis/v9"
+	"github.com/rivando-al-rasyid/vanwallet-backend/internals/cache"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/config"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/dto"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/model"
@@ -14,7 +17,6 @@ import (
 
 type ProfileRepository interface {
 	UserProfile(ctx context.Context, email string) (model.Profile, error)
-	GetUserInfo(ctx context.Context, email string) (model.Profile, error)
 	EditProfile(ctx context.Context, email string, updates map[string]any) (model.Profile, error)
 	EditPassword(ctx context.Context, email string, newPassword string) (model.User, error)
 	GetCurrentPassword(ctx context.Context, email string) (string, error)
@@ -24,19 +26,15 @@ type ProfileRepository interface {
 
 type ProfileService struct {
 	repo ProfileRepository
+	rdb  *redis.Client
 }
 
-func NewProfileService(repo ProfileRepository) *ProfileService {
-	return &ProfileService{repo: repo}
+func NewProfileService(repo ProfileRepository, rdb *redis.Client) *ProfileService {
+	return &ProfileService{repo: repo, rdb: rdb}
 }
 
 func (s *ProfileService) GetProfile(ctx context.Context, email string) (model.Profile, error) {
 	return s.repo.UserProfile(ctx, email)
-}
-
-// GetUserInfo returns profile fields and total balance — used for the app header.
-func (s *ProfileService) GetUserInfo(ctx context.Context, email string) (model.Profile, error) {
-	return s.repo.GetUserInfo(ctx, email)
 }
 
 func (s *ProfileService) EditProfile(ctx context.Context, email string, updates map[string]any) (model.Profile, error) {
@@ -97,7 +95,20 @@ func (s *ProfileService) EditPassword(ctx context.Context, email, oldPassword, n
 	}
 	hc.UseRecommended()
 	newHash := hc.GenHash(newPassword)
-	return s.repo.EditPassword(ctx, email, newHash)
+	user, err := s.repo.EditPassword(ctx, email, newHash)
+	if err != nil {
+		return model.User{}, err
+	}
+
+	if err := cache.DelFromCache(ctx, s.rdb, userCacheKey(email)); err != nil {
+		log.Println("cache evict error after password change:", err)
+	}
+
+	return user, nil
+}
+
+func userCacheKey(email string) string {
+	return "vando:user:" + strings.ToLower(strings.TrimSpace(email))
 }
 
 var (

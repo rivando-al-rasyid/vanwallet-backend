@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// UserPin stores the bcrypt-hashed PIN for a user.
+// UserPin stores the Argon2id-hashed PIN for a user.
 // LockedUntil enables brute-force protection — nil means not locked.
 type UserPin struct {
 	ID             uuid.UUID  `db:"id"`

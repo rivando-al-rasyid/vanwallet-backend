@@ -12,6 +12,10 @@ import (
 const DefaultTTL = 10 * time.Minute
 
 func GetFromCache[T any](ctx context.Context, rdb *redis.Client, rkey string, dst *T) error {
+	if rdb == nil {
+		return redis.Nil
+	}
+
 	data, err := rdb.Get(ctx, rkey).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
@@ -23,6 +27,10 @@ func GetFromCache[T any](ctx context.Context, rdb *redis.Client, rkey string, ds
 }
 
 func SaveToCache(ctx context.Context, rdb *redis.Client, rkey string, data any, ttl ...time.Duration) error {
+	if rdb == nil {
+		return nil
+	}
+
 	expiry := DefaultTTL
 	if len(ttl) > 0 {
 		expiry = ttl[0]
@@ -35,6 +43,10 @@ func SaveToCache(ctx context.Context, rdb *redis.Client, rkey string, data any, 
 }
 
 func DelFromCache(ctx context.Context, rdb *redis.Client, rkeys ...string) error {
+	if rdb == nil || len(rkeys) == 0 {
+		return nil
+	}
+
 	if err := rdb.Del(ctx, rkeys...).Err(); err != nil {
 		return err
 	}

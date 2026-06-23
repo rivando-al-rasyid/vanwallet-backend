@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 
@@ -12,6 +13,10 @@ func ConnectRedis() (*redis.Client, error) {
 	redisAddr := strings.TrimSpace(os.Getenv("REDIS_URL"))
 	if redisAddr == "" {
 		redisAddr = strings.TrimSpace(os.Getenv("RDB_ADDR"))
+	}
+
+	if redisAddr == "" {
+		return nil, errors.New("missing redis address: set REDIS_URL or RDB_ADDR")
 	}
 
 	var opt *redis.Options

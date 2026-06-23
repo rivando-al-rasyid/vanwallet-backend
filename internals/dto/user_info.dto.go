@@ -1,6 +1,6 @@
 package dto
 
-// UserInfoResponse is returned by GET /profile/info.
+// UserInfoResponse is returned by GET /auth/me.
 // Used to populate the app header: avatar, name, email, wallet balance, and PIN status.
 type UserInfoResponse struct {
 	ID             string  `json:"id"`
