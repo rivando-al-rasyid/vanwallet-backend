@@ -6,24 +6,15 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/cache"
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/model"
 )
 
 type TransactionRepository interface {
-	VerifyPIN(ctx context.Context, email, rawPin string) error
-	WalletBelongsToUser(ctx context.Context, email string, walletID uuid.UUID) (bool, error)
 	GetSummary(ctx context.Context, email string) (model.TransactionSummary, error)
 	GetTransactionReport(ctx context.Context, email, rangeParam, typeFilter string) ([]model.ChartPoint, error)
 	GetAllHistory(ctx context.Context, email string, filter model.HistoryFilter) ([]model.HistoryItem, int, error)
-	CreateTopup(ctx context.Context, req model.Topup) (model.Topup, error)
-	ConfirmTopup(ctx context.Context, email string, topupID uuid.UUID) (model.Topup, error)
-	CreateWithdrawal(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, bank model.Withdrawal) (model.Transaction, error)
-	CreateTransfer(ctx context.Context, senderWalletID, recipientWalletID uuid.UUID, amount, adminFee int64, note *string) (model.Transfer, model.Transaction, model.Transaction, error)
-	CreateExpense(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, category, merchantName, note *string) (model.Transaction, error)
-	SearchReceivers(ctx context.Context, callerEmail, query string, page, limit int) ([]model.ReceiverResult, int, error)
 }
 
 type TransactionService struct {
@@ -35,15 +26,6 @@ func NewTransactionService(repo TransactionRepository, rdb *redis.Client) *Trans
 	return &TransactionService{repo: repo, rdb: rdb}
 }
 
-// VerifyPIN checks the stored argon2 PIN hash against rawPin before committing any sensitive operation.
-func (s *TransactionService) VerifyPIN(ctx context.Context, email, rawPin string) error {
-	return s.repo.VerifyPIN(ctx, email, rawPin)
-}
-
-func (s *TransactionService) WalletBelongsToUser(ctx context.Context, email string, walletID uuid.UUID) (bool, error) {
-	return s.repo.WalletBelongsToUser(ctx, email, walletID)
-}
-
 func (s *TransactionService) GetSummary(ctx context.Context, email string) (model.TransactionSummary, error) {
 	return s.repo.GetSummary(ctx, email)
 }
@@ -52,10 +34,27 @@ func (s *TransactionService) GetTransactionReport(ctx context.Context, email, ra
 	return s.repo.GetTransactionReport(ctx, email, rangeParam, typeFilter)
 }
 
+func (s *TransactionService) historyCacheVersion(ctx context.Context, email string) string {
+	if s.rdb == nil {
+		return "0"
+	}
+
+	version, err := s.rdb.Get(ctx, historyVersionKey(email)).Result()
+	if err == nil {
+		return version
+	}
+	if !errors.Is(err, redis.Nil) {
+		log.Println("history version redis error:", err)
+	}
+	return "0"
+}
+
 func (s *TransactionService) GetAllHistory(ctx context.Context, email string, filter model.HistoryFilter) ([]model.HistoryItem, int, error) {
+	version := s.historyCacheVersion(ctx, email)
 	rkey := fmt.Sprintf(
-		"vando:history:%s:p%d:l%d:w%s:s%s:t%s:st%s:d%s:from%s:to%s:q%s",
+		"vando:history:%s:v%s:p%d:l%d:w%s:s%s:t%s:st%s:d%s:from%s:to%s:q%s",
 		email,
+		version,
 		filter.Page,
 		filter.Limit,
 		filter.WalletID,
@@ -92,28 +91,4 @@ func (s *TransactionService) GetAllHistory(ctx context.Context, email string, fi
 	}
 
 	return fetched, total, nil
-}
-
-func (s *TransactionService) CreateTopup(ctx context.Context, req model.Topup) (model.Topup, error) {
-	return s.repo.CreateTopup(ctx, req)
-}
-
-func (s *TransactionService) ConfirmTopup(ctx context.Context, email string, topupID uuid.UUID) (model.Topup, error) {
-	return s.repo.ConfirmTopup(ctx, email, topupID)
-}
-
-func (s *TransactionService) CreateWithdrawal(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, bank model.Withdrawal) (model.Transaction, error) {
-	return s.repo.CreateWithdrawal(ctx, walletID, amount, adminFee, bank)
-}
-
-func (s *TransactionService) CreateTransfer(ctx context.Context, senderWalletID, recipientWalletID uuid.UUID, amount, adminFee int64, note *string) (model.Transfer, model.Transaction, model.Transaction, error) {
-	return s.repo.CreateTransfer(ctx, senderWalletID, recipientWalletID, amount, adminFee, note)
-}
-
-func (s *TransactionService) CreateExpense(ctx context.Context, walletID uuid.UUID, amount, adminFee int64, category, merchantName, note *string) (model.Transaction, error) {
-	return s.repo.CreateExpense(ctx, walletID, amount, adminFee, category, merchantName, note)
-}
-
-func (s *TransactionService) SearchReceivers(ctx context.Context, callerEmail, query string, page, limit int) ([]model.ReceiverResult, int, error) {
-	return s.repo.SearchReceivers(ctx, callerEmail, query, page, limit)
 }

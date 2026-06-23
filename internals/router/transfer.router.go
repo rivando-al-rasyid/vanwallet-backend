@@ -10,13 +10,11 @@ import (
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/service"
 )
 
-func TransactionRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) {
-	txRepo := repository.NewTransactionRepo(db)
-	txServ := service.NewTransactionService(txRepo, rdb)
-	txCont := controller.NewTransactionController(txServ)
+func TransferRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) {
+	transferRepo := repository.NewTransactionRepo(db)
+	transferServ := service.NewTransferService(transferRepo, rdb)
+	transferCont := controller.NewTransferController(transferServ)
 
 	g := router.Group("/transaction", middleware.AuthRequired(db))
-	g.GET("/summary", txCont.GetSummary)
-	g.GET("/report", txCont.GetTransactionReport)
-	g.GET("/history", txCont.GetHistory)
+	g.POST("/transfer", transferCont.CreateTransfer)
 }
