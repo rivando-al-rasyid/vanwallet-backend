@@ -35,23 +35,6 @@ projects:
               - key: ALLOWED_ORIGIN
                 value: https://vanwallet-frontend.onrender.com
 
-          - type: web
-            name: vanwallet-frontend
-            runtime: image
-            image:
-              url: ghcr.io/rivando-al-rasyid/vanwallet-react:latest
-            plan: free
-            region: singapore
-            envVars:
-              - key: PORT
-                value: 8080
-              - key: BACKEND_URL
-                value: https://vanwallet-backend.onrender.com
-              - key: VITE_API_BASE_URL
-                value: /api
-              - key: VITE_API_URL
-                value: /api
-
           - type: keyvalue
             name: vanwallet-redis
             plan: free
