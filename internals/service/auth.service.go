@@ -36,10 +36,12 @@ type AuthSession struct {
 type AuthService struct {
 	authRepo AuthRepo
 	rdb      *redis.Client
+	mail     *MailService
 }
 
-func NewAuthService(authRepo AuthRepo, rdb *redis.Client) *AuthService {
-	return &AuthService{authRepo: authRepo, rdb: rdb}
+func NewAuthService(authRepo AuthRepo, rdb *redis.Client, mail *MailService,
+) *AuthService {
+	return &AuthService{authRepo: authRepo, rdb: rdb, mail: mail}
 }
 
 func normalizeAuthEmail(email string) string {
@@ -106,16 +108,19 @@ func (a *AuthService) Login(ctx context.Context, user dto.LoginRequest) (AuthSes
 
 func (a *AuthService) ResetPassword(ctx context.Context, user dto.ResetPasswordRequest) (string, error) {
 	email := normalizeAuthEmail(user.Email)
+
 	login, err := a.getOrFetchUser(ctx, email)
 	if err != nil {
 		return "", err
 	}
+
 	token, err := generateResetToken(32)
 	if err != nil {
 		return "", err
 	}
 
 	expiresAt := time.Now().Add(pkg.ResetTokenExpiry)
+
 	if err := a.authRepo.SaveToken(
 		ctx,
 		login.ID,
@@ -126,7 +131,11 @@ func (a *AuthService) ResetPassword(ctx context.Context, user dto.ResetPasswordR
 		return "", err
 	}
 
-	return token, nil
+	if err := a.mail.SendResetPassword(login.Email, token); err != nil {
+		return "", err
+	}
+
+	return "Password reset email has been sent successfully.", nil
 }
 
 func (a *AuthService) ConfirmResetPassword(ctx context.Context, user dto.ConfirmResetPassword) (string, error) {

@@ -4,3 +4,4 @@ tmp
 .env*
 docker-compose.yml
 docs
+.air

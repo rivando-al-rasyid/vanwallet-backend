@@ -10,9 +10,9 @@ import (
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/service"
 )
 
-func AuthRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) {
+func AuthRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client, mail *service.MailService) {
 	authRepo := repository.NewAuthRepo(db)
-	authServ := service.NewAuthService(authRepo, rdb)
+	authServ := service.NewAuthService(authRepo, rdb, mail)
 	authCont := controller.NewAuthController(authServ)
 
 	auth := router.Group("/auth")

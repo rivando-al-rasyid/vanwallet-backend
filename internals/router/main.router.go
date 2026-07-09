@@ -8,9 +8,10 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/middleware"
+	"github.com/rivando-al-rasyid/vanwallet-backend/internals/service"
 )
 
-func MainRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) {
+func MainRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client, mail *service.MailService) {
 	router.Use(middleware.CORSMiddleware)
 	router.Static("/img", "public/img")
 
@@ -36,7 +37,7 @@ func MainRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client) {
 		ctx.JSON(http.StatusOK, gin.H{"status": "ready", "database": "up", "redis": redisStatus})
 	})
 
-	AuthRouter(router, db, rdb)
+	AuthRouter(router, db, rdb, mail)
 	ProfileRouter(router, db, rdb)
 	TransactionRouter(router, db, rdb)
 	ReceiverRouter(router, db)
