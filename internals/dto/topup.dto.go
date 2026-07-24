@@ -16,5 +16,8 @@ type TopupResponse struct {
 	PaymentMethod     string `json:"payment_method"`
 	ExternalReference string `json:"external_reference,omitempty"`
 	Status            string `json:"status"`
+	SnapToken         string `json:"snap_token,omitempty"`
+	RedirectURL       string `json:"redirect_url,omitempty"`
+	ClientKey         string `json:"client_key,omitempty"`
 	CreatedAt         string `json:"created_at"`
 }

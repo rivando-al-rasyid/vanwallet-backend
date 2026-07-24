@@ -51,11 +51,20 @@ func main() {
 
 	log.Println("Mail Service Connected")
 
+	midtransCfg, err := config.MidtransConfigFromEnv()
+	if err != nil {
+		log.Fatalf("Midtrans config error: %s", err.Error())
+	}
+	midtransService := service.NewMidtransService(midtransCfg)
+
+	log.Println("Midtrans Service Connected")
+
 	router.MainRouter(
 		app,
 		db,
 		rc,
 		mailService,
+		midtransService,
 	)
 
 	port := os.Getenv("PORT")

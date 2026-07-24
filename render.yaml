@@ -34,6 +34,14 @@ projects:
                 sync: false
               - key: ALLOWED_ORIGIN
                 value: https://vanwallet-frontend.onrender.com
+              - key: MIDTRANS_SERVER_KEY
+                sync: false
+              - key: MIDTRANS_CLIENT_KEY
+                sync: false
+              - key: MIDTRANS_IS_PRODUCTION
+                value: "false"
+              - key: MIDTRANS_FINISH_URL
+                value: https://vanwallet-frontend.onrender.com/topup/finish
 
           - type: keyvalue
             name: vanwallet-redis

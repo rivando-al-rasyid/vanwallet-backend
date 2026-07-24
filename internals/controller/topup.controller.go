@@ -1,7 +1,9 @@
 package controller
 
 import (
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -21,8 +23,8 @@ func NewTopupController(topupService *service.TopupService) *TopupController {
 }
 
 // CreateTopup godoc
-// @Summary      Initiate wallet top-up
-// @Description  Creates a pending top-up. Balance crediting must be handled by a trusted webhook.
+// @Summary      Initiate wallet top-up via Midtrans
+// @Description  Creates a pending top-up and returns a Midtrans Snap token for payment.
 // @Tags         Topups
 // @Accept       json
 // @Produce      json
@@ -58,7 +60,7 @@ func (t *TopupController) CreateTopup(ctx *gin.Context) {
 	}
 
 	pm := model.PaymentMethod(body.PaymentMethod)
-	topup, err := t.topupService.CreateTopup(ctx.Request.Context(), model.Topup{
+	result, err := t.topupService.CreateTopup(ctx.Request.Context(), email, model.Topup{
 		WalletID:      walletID,
 		Amount:        body.Amount,
 		PaymentMethod: &pm,
@@ -68,6 +70,7 @@ func (t *TopupController) CreateTopup(ctx *gin.Context) {
 		return
 	}
 
+	topup := result.Topup
 	extRef := ""
 	if topup.ExternalReference != nil {
 		extRef = *topup.ExternalReference
@@ -84,6 +87,54 @@ func (t *TopupController) CreateTopup(ctx *gin.Context) {
 		PaymentMethod:     pmStr,
 		ExternalReference: extRef,
 		Status:            string(topup.Status),
+		SnapToken:         result.SnapToken,
+		RedirectURL:       result.RedirectURL,
+		ClientKey:         result.ClientKey,
 		CreatedAt:         topup.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}))
+}
+
+type MidtransWebhookController struct {
+	topupService *service.TopupService
+}
+
+func NewMidtransWebhookController(topupService *service.TopupService) *MidtransWebhookController {
+	return &MidtransWebhookController{topupService: topupService}
+}
+
+// HandleNotification godoc
+// @Summary      Midtrans payment notification webhook
+// @Description  Receives Midtrans payment status updates and settles successful top-ups.
+// @Tags         Webhooks
+// @Accept       json
+// @Produce      json
+// @Param        body  body  dto.MidtransNotification  true  "Midtrans notification payload"
+// @Success      200   {object}  dto.Response
+// @Failure      400   {object}  dto.Response{error}
+// @Failure      401   {object}  dto.Response{error}
+// @Failure      500   {object}  dto.Response{error}
+// @Router       /webhooks/midtrans [post]
+func (m *MidtransWebhookController) HandleNotification(ctx *gin.Context) {
+	rawBody, err := io.ReadAll(ctx.Request.Body)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid request body", err))
+		return
+	}
+
+	var notification dto.MidtransNotification
+	if err := json.Unmarshal(rawBody, &notification); err != nil {
+		ctx.JSON(http.StatusBadRequest, dto.NewError("Invalid notification payload", err))
+		return
+	}
+
+	if err := m.topupService.HandleMidtransNotification(ctx.Request.Context(), notification, rawBody); err != nil {
+		if err.Error() == "invalid midtrans signature" {
+			ctx.JSON(http.StatusUnauthorized, dto.NewError("Invalid signature", err))
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, dto.NewError("Failed to process notification", err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, dto.NewSuccessNoData("Notification processed"))
 }

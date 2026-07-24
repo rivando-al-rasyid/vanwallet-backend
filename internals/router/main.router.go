@@ -11,7 +11,7 @@ import (
 	"github.com/rivando-al-rasyid/vanwallet-backend/internals/service"
 )
 
-func MainRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client, mail *service.MailService) {
+func MainRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client, mail *service.MailService, midtrans *service.MidtransService) {
 	router.Use(middleware.CORSMiddleware)
 	router.Static("/img", "public/img")
 
@@ -41,7 +41,7 @@ func MainRouter(router *gin.Engine, db *pgxpool.Pool, rdb *redis.Client, mail *s
 	ProfileRouter(router, db, rdb)
 	TransactionRouter(router, db, rdb)
 	ReceiverRouter(router, db)
-	TopupRouter(router, db, rdb)
+	TopupRouter(router, db, rdb, midtrans)
 	WithdrawalRouter(router, db, rdb)
 	TransferRouter(router, db, rdb)
 	ExpenseRouter(router, db, rdb)
